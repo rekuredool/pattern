@@ -1327,6 +1327,74 @@ output {
   }
 }
 
+/* ---------- CHANGE PATTERN を目立たせる ---------- */
+.btn--change {
+  background: var(--sulfur);
+  border-color: var(--sulfur);
+  color: #12181f;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  box-shadow: 0 0 0 0 rgba(215, 178, 60, 0.6);
+  animation: change-pulse 2.4s ease-out infinite;
+}
+
+.btn--change:hover {
+  background: #e5c24d;
+  border-color: #e5c24d;
+}
+
+.btn--change[disabled] {
+  animation: none;
+  opacity: 0.6;
+}
+
+.btn--change__icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.btn--change:active .btn--change__icon {
+  transform: rotate(180deg);
+}
+
+@keyframes change-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(215, 178, 60, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(215, 178, 60, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(215, 178, 60, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn--change {
+    animation: none;
+  }
+}
+
+@media (max-width: 880px) {
+  .btn--change {
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+}
+
+.btn--garment {
+  border-color: var(--rose, #c94f6d);
+  color: #f0b7c6;
+}
+
+.btn--garment:hover {
+  background: rgba(201, 79, 109, 0.18);
+}
+
 </style>
   </head>
   <body>
@@ -1343,7 +1411,12 @@ output {
             <input id="fileInput" type="file" accept="image/*" multiple hidden />
           </label>
           <button class="btn btn--primary" id="autoBtn" title="設定を変えてもう一度自動生成する">AUTO PATTERN</button>
-          <button class="btn btn--ghost" id="changeBtn" title="別の案を試す（シームレスの4条件を通った案だけを順に表示）">CHANGE PATTERN</button>
+          <button class="btn btn--change" id="changeBtn" title="別の案を試す（シームレスの4条件を通った案だけを順に表示）">
+            CHANGE PATTERN
+          </button>
+          <label class="btn btn--ghost btn--garment" for="garmentInput" title="服の写真を選んで、散らし・上向き・重なりなしの総柄にする">洋服モード
+            <input id="garmentInput" type="file" accept="image/*" hidden />
+          </label>
           <button class="btn btn--ghost" id="regenBtn" title="同じ設定で配置し直す">再配置</button>
           <label class="btn btn--ghost" for="projectInput">開く
             <input id="projectInput" type="file" accept="application/json" hidden />
@@ -1463,7 +1536,7 @@ output {
             <button class="zoom__btn zoom__value" data-zoom="fit" id="zoomValue" title="クリックで全体表示">100%</button>
             <button class="zoom__btn" data-zoom="in" aria-label="拡大">＋</button>
             <button class="zoom__btn" data-zoom="actual" title="リピート単位を等倍で見る">1:1</button>
-            <button class="zoom__btn" id="panModeBtn" title="左ドラッグで画面を動かす">✋</button>
+            <button class="zoom__btn" id="panModeBtn" title="左ドラッグで画面を動かす">移動</button>
           </div>
           <div class="stage__hud">
             <span id="hudInfo">画像を読み込むと自動で柄になります</span>
@@ -6114,6 +6187,27 @@ output {
       this.markDirty();
       return { restored: true, size: { width: original.width, height: original.height } };
     }
+    /**
+     * 洋服モード：服（大きな1〜2点のモチーフ）を、散らし・上向き・重なりなしで総柄にする。
+     * 自動では「モチーフが絵の12%以上」のときだけ働くが、ボタンからはいつでも使える。
+     */
+    applyGarmentMode({ seed = null } = {}) {
+      if (!this.recipe.motifs.length) return { applied: false, reason: "\u30E2\u30C1\u30FC\u30D5\u304C\u3042\u308A\u307E\u305B\u3093\uFF08\u670D\u306E\u5199\u771F\u3092\u8AAD\u307F\u8FBC\u3093\u3067\u304F\u3060\u3055\u3044\uFF09" };
+      this.recipe.constraints.allOverOnly = true;
+      this.recipe.repeatStrategy = "all-over";
+      const largest = Math.max(...this.recipe.motifs.map((m) => Math.max(m.width, m.height)));
+      Object.assign(this.recipe.generator, {
+        density: 0.35,
+        rotationVariation: 25,
+        randomRotation: 0,
+        scaleVariation: 0.2,
+        scale: Math.min(0.6, 260 / Math.max(1, largest))
+      });
+      this.recipe.collision = { ...this.recipe.collision ?? {}, enabled: true, padding: 12, mode: "avoid" };
+      this.recipe.meta.garmentMode = true;
+      this.generate(seed != null ? { seed } : { newSeed: true });
+      return { applied: true, placements: this.recipe.placements.length };
+    }
     // ---- 色 -------------------------------------------------------------
     /**
      * 柄が何色でできているかを調べる。
@@ -6667,7 +6761,7 @@ output {
      * @param {(step:{id:string,label:string,status:string,detail?:string})=>void} options.onStep
      */
     async run({ canvas = null, onStep = () => {
-    }, targetScore = 72, maxRepairs = 4, forceInputType = null } = {}) {
+    }, targetScore = 72, maxRepairs = 4, forceInputType = null, forceGarment = false } = {}) {
       const engine2 = this.engine;
       const steps = [];
       const step = async (id, label, fn) => {
@@ -6764,9 +6858,9 @@ output {
           });
         }
       }
-      if (engine2.recipe.motifs.length > 0 && engine2.recipe.motifs.length <= 2) {
+      if (engine2.recipe.motifs.length > 0 && (forceGarment || engine2.recipe.motifs.length <= 2)) {
         const largest = Math.max(...engine2.recipe.motifs.map((m) => m.width * m.height / (canvas.width * canvas.height)));
-        if (largest > 0.12) {
+        if (forceGarment || largest > 0.12) {
           await step("garment", "\u6D0B\u670D\u30FB\u5927\u304D\u306A1\u70B9\u30E2\u30C1\u30FC\u30D5\u3068\u3057\u3066\u6563\u3089\u3059", () => {
             engine2.recipe.constraints.allOverOnly = true;
             engine2.recipe.repeatStrategy = "all-over";
@@ -8796,6 +8890,7 @@ output {
     }
   });
   var lastSourceCanvas = null;
+  var pendingGarment = false;
   var evaluateTimer = null;
   function toast(message, ms = 2600) {
     const el = $("toast");
@@ -9291,7 +9386,7 @@ output {
       }, 6e3);
     }
   }
-  async function runAuto({ forceInputType = null } = {}) {
+  async function runAuto({ forceInputType = null, forceGarment = false } = {}) {
     const btn = $("autoBtn");
     btn.disabled = true;
     engine.pushHistory("AUTO PATTERN");
@@ -9299,6 +9394,7 @@ output {
     try {
       const result = await pipeline.run({
         canvas: lastSourceCanvas,
+        forceGarment,
         forceInputType,
         onStep: (step) => {
           const i = live.findIndex((s) => s.id === step.id);
@@ -9421,8 +9517,10 @@ output {
       list.forEach((m, k) => engine.addMotifFromCanvas(m.canvas, { name: `Motif ${engine.recipe.motifs.length + 1}`, place: false, weight: k === 0 ? 30 : 15 }));
     }
     refreshAll();
-    toast(`${canvases.length} \u679A\u3092\u8AAD\u307F\u8FBC\u307F\u307E\u3057\u305F\u3002\u81EA\u52D5\u3067\u67C4\u306B\u3057\u307E\u3059`);
-    await runAuto();
+    const garment = pendingGarment;
+    pendingGarment = false;
+    toast(garment ? "\u670D\u306E\u5199\u771F\u3092\u8AAD\u307F\u8FBC\u307F\u307E\u3057\u305F\u3002\u6D0B\u670D\u30E2\u30FC\u30C9\u3067\u67C4\u306B\u3057\u307E\u3059" : `${canvases.length} \u679A\u3092\u8AAD\u307F\u8FBC\u307F\u307E\u3057\u305F\u3002\u81EA\u52D5\u3067\u67C4\u306B\u3057\u307E\u3059`);
+    await runAuto({ forceGarment: garment });
   }
   function extractMotifsFromSource() {
     engine.pushHistory("\u30E2\u30C1\u30FC\u30D5\u3092\u62BD\u51FA");
@@ -9950,6 +10048,13 @@ output {
           btn.disabled = false;
         }
       }, 30);
+    });
+    $("garmentInput").addEventListener("change", async (e) => {
+      const files = [...e.target.files ?? []];
+      e.target.value = "";
+      if (!files.length) return;
+      pendingGarment = true;
+      await handleFiles(files);
     });
     $("undoBtn").addEventListener("click", doUndo);
     $("redoBtn").addEventListener("click", doRedo);
