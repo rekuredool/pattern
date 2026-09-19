@@ -921,7 +921,7 @@ output {
 
 .swatch {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) 42px 22px;
+  grid-template-columns: 30px minmax(0, 1fr) 42px 22px 26px;
   align-items: center;
   gap: 8px;
 }
@@ -1395,6 +1395,23 @@ output {
   background: rgba(201, 79, 109, 0.18);
 }
 
+.panel__sub {
+  margin: 14px 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.04em;
+}
+
+.hint.is-warn {
+  color: var(--sulfur);
+}
+
+.swatch__undo.is-on {
+  color: var(--sulfur);
+  font-weight: 700;
+}
+
 </style>
   </head>
   <body>
@@ -1424,8 +1441,8 @@ output {
           <details class="menu" id="saveMenu">
             <summary class="btn btn--ghost" title="保存の形式を選びます">保存 ▾</summary>
             <div class="menu__list">
-              <button class="menu__item" data-save="jpeg"><b>JPEG</b><span>画像として保存（300dpi）</span></button>
-              <button class="menu__item" data-save="tiff"><b>TIF</b><span>入稿用（LZW可逆・300dpi）</span></button>
+              <button class="menu__item" data-save="jpeg"><b>JPEG</b><span>1リピート・300dpi（足りない画素は Lanczos で補う）</span></button>
+              <button class="menu__item" data-save="tiff"><b>TIF</b><span>入稿用・1リピート・300dpi・LZW可逆</span></button>
               <button class="menu__item" data-save="project"><b>作業ファイル</b><span>続きから編集できる .pattern.json</span></button>
               <label class="menu__check"><input type="checkbox" id="saveLossless" /> 作業ファイルは画質優先（可逆）で保存</label>
             </div>
@@ -1456,11 +1473,12 @@ output {
             </label>
             <div class="row row--wrap">
               <button class="btn btn--tiny" id="reAutoBtn">この扱いでやり直す</button>
+              <button class="btn btn--tiny" id="composeBtn">総柄に組み立てる</button>
               <button class="btn btn--tiny" id="rebuildBtn">総柄に作り直す</button>
               <button class="btn btn--tiny" id="cutBtn">切り貼りでタイル化</button>
               <button class="btn btn--tiny" id="enlargeBtn">リピートを大きくする（2×2）</button>
             </div>
-            <p class="hint">総柄に作り直す：絵からモチーフを取り出し、<b>元の位置のまま</b>並べ直します。地は単色になります。<br />切り貼りでタイル化：柄の切れ目に沿って端を切り貼りします。どんな絵にも使え、ぼかしも重なりも出ません。絵は重ね幅のぶん小さくなります。<br />リピートを大きくする：同じ絵を位置違いで2×2に組み、境目を切れ目で切ります。周期が伸びて繰り返しが目立たなくなります。</p>
+            <p class="hint">総柄に組み立てる：1点もの・余白のある絵・パネルから、物を取り出して格子＋散らしで総柄にします。切り貼りを使わないので物が切れません。<br />総柄に作り直す：絵からモチーフを取り出し、<b>元の位置のまま</b>並べ直します。地は単色になります。<br />切り貼りでタイル化：柄の切れ目に沿って端を切り貼りします。どんな絵にも使え、ぼかしも重なりも出ません。絵は重ね幅のぶん小さくなります。<br />リピートを大きくする：同じ絵を位置違いで2×2に組み、境目を切れ目で切ります。周期が伸びて繰り返しが目立たなくなります。</p>
             <div id="borderWarning" class="verdict is-ng" hidden>
               <span class="verdict__mark">注意</span>
               <span class="verdict__text" id="borderWarningText"></span>
@@ -1590,7 +1608,7 @@ output {
               <button data-scale="XL" class="seg__btn">XL</button>
             </div>
             <div class="row row--split">
-              <label class="field"><span>リピート幅 (cm)</span><input class="input" id="widthCm" type="number" step="0.1" min="1" /></label>
+              <label class="field"><span>1リピートの幅 (cm)　※標準 30</span><input class="input" id="widthCm" type="number" step="0.1" min="1" /></label>
               <label class="field"><span>高さ (cm)</span><input class="input" id="heightCm" type="number" step="0.1" min="1" /></label>
             </div>
             <div class="row row--split">
@@ -1694,6 +1712,26 @@ output {
               </label>
             </div>
             <p class="hint" id="exportNote"></p>
+            <p class="hint" id="resolutionNote"></p>
+
+            <h3 class="panel__sub">大判シート（必要な場合のみ）</h3>
+            <div class="row row--split">
+              <label class="field"><span>生地幅 (cm)</span><input class="input" id="sheetWidthCm" type="number" step="1" min="10" value="130" /></label>
+              <label class="field"><span>長さ (cm)</span><input class="input" id="sheetHeightCm" type="number" step="1" min="10" value="100" /></label>
+            </div>
+            <label class="field">
+              <span>解像度</span>
+              <select class="select" id="sheetDpi">
+                <option value="150" selected>150 dpi（布・大判の標準）</option>
+                <option value="200">200 dpi</option>
+                <option value="300">300 dpi（紙・小物）</option>
+              </select>
+            </label>
+            <p class="hint" id="sheetNote"></p>
+            <div class="export-main">
+              <button class="btn btn--export" id="sheetTiffBtn"><span class="export__icon export__icon--tif" aria-hidden="true">TIF</span><span>シートを TIF で保存</span></button>
+              <button class="btn btn--export" id="sheetJpegBtn"><span class="export__icon" aria-hidden="true">JPG</span><span>シートを JPEG で保存</span></button>
+            </div>
           </section>
         </aside>
       </main>
@@ -2074,8 +2112,9 @@ output {
       height: 1200,
       dpi: 300,
       // 実寸。textile 印刷では必須情報なので常に保持する。
-      physicalWidthCm: 10.16,
-      physicalHeightCm: 10.16,
+      physicalWidthCm: 30,
+      // 1リピートの標準（プリント業者に渡す1タイル）
+      physicalHeightCm: 30,
       unit: "cm",
       scalePreset: "M",
       ...overrides
@@ -2139,7 +2178,7 @@ output {
       ...overrides
     };
   }
-  function createPlacement(overrides = {}) {
+  function createPlacement2(overrides = {}) {
     return {
       id: overrides.id ?? `pl-${Math.random().toString(36).slice(2, 9)}`,
       motifId: null,
@@ -2426,7 +2465,7 @@ output {
       const flipY = (gen.flipProbability ?? 0) > 0 ? rngVar.bool(gen.flipProbability * 0.6) : false;
       const x = wrapValue(slot.x + jx + ex + (gen.offsetX ?? 0) * unit.width, unit.width);
       const y = wrapValue(slot.y + jy + ey + (gen.offsetY ?? 0) * unit.height, unit.height);
-      return createPlacement({
+      return createPlacement2({
         motifId: motif.id,
         x,
         y,
@@ -3348,7 +3387,14 @@ output {
       img.src = url;
     });
   }
-  function toCanvas(source, maxSize = 2048) {
+  function workingMax() {
+    const nav = globalThis.navigator;
+    const lowMemory = nav && typeof nav.deviceMemory === "number" && nav.deviceMemory < 4;
+    const mobile = nav && /Mobi|Android|iPhone|iPad/i.test(nav.userAgent ?? "");
+    return lowMemory || mobile ? 2048 : 3200;
+  }
+  function toCanvas(source, maxSize = null) {
+    if (maxSize == null) maxSize = workingMax();
     const sw = source.naturalWidth ?? source.width;
     const sh = source.naturalHeight ?? source.height;
     const ratio = Math.min(1, maxSize / Math.max(sw, sh));
@@ -3448,13 +3494,36 @@ output {
     if (!m) return { r: 0, g: 0, b: 0 };
     return { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) };
   }
-  function removeBackgroundColor(canvas, { color = null, tolerance = 42, feather = 12 } = {}) {
+  function estimateBackgroundTolerance(canvas, target, { min = 10, max = 42 } = {}) {
+    const img = sampleImageData(canvas, 240);
+    const d = img.data;
+    const bins = new Array(41).fill(0);
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] < 24) continue;
+      const dist = Math.hypot(d[i] - target.r, d[i + 1] - target.g, d[i + 2] - target.b);
+      if (dist <= 80) bins[Math.floor(dist / 2)] += 1;
+      n += 1;
+    }
+    if (n < 100) return max;
+    const peak = Math.max(bins[0], bins[1], bins[2]);
+    for (let b = 3; b < bins.length - 3; b++) {
+      const quiet = bins[b] < peak * 0.03 && bins[b + 1] < peak * 0.03 && bins[b + 2] < peak * 0.03;
+      if (quiet) return Math.max(min, Math.min(max, b * 2 + 4));
+    }
+    return max;
+  }
+  function removeBackgroundColor(canvas, { color = null, tolerance = null, feather = 12 } = {}) {
     const out = cloneCanvas(canvas);
     const c = ctx2d(out);
     const img = c.getImageData(0, 0, out.width, out.height);
     const data = img.data;
-    const target = color ? hexToRgb(color) : estimateBackgroundColor(canvas);
-    const soft = Math.max(1, feather);
+    const target = color ? hexToRgb(color) : (() => {
+      const g = estimateGroundColor(canvas);
+      return { r: g.r, g: g.g, b: g.b };
+    })();
+    if (tolerance == null) tolerance = estimateBackgroundTolerance(canvas, target);
+    const soft = Math.max(2, Math.min(feather, tolerance * 0.5));
     for (let i = 0; i < data.length; i += 4) {
       const d = Math.hypot(data[i] - target.r, data[i + 1] - target.g, data[i + 2] - target.b);
       if (d <= tolerance) {
@@ -4246,21 +4315,21 @@ output {
       };
     }
     /** 変更を加える「直前」に呼ぶ */
-    push(recipe2, label = "\u5909\u66F4") {
-      this.past.push({ label, snapshot: cloneRecipe(recipe2) });
+    push(recipe2, label2 = "\u5909\u66F4") {
+      this.past.push({ label: label2, snapshot: cloneRecipe(recipe2) });
       if (this.past.length > this.limit) this.past.shift();
       this.future.length = 0;
       this.#notify();
     }
     /** 連続操作（ドラッグ中の細かい変化）をまとめる */
-    pushCoalesced(recipe2, label, windowMs = 600) {
+    pushCoalesced(recipe2, label2, windowMs = 600) {
       const last = this.past.at(-1);
       const now = Date.now();
-      if (last && last.label === label && now - (last.at ?? 0) < windowMs) {
+      if (last && last.label === label2 && now - (last.at ?? 0) < windowMs) {
         last.at = now;
         return;
       }
-      this.past.push({ label, snapshot: cloneRecipe(recipe2), at: now });
+      this.past.push({ label: label2, snapshot: cloneRecipe(recipe2), at: now });
       if (this.past.length > this.limit) this.past.shift();
       this.future.length = 0;
       this.#notify();
@@ -4286,9 +4355,102 @@ output {
     }
   };
 
+  // src/core/motif/SplitTouching.js
+  function erode(mask, width, height) {
+    const out = new Uint8Array(mask.length);
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        const p = y * width + x;
+        if (!mask[p]) continue;
+        if (mask[p - 1] && mask[p + 1] && mask[p - width] && mask[p + width]) out[p] = 1;
+      }
+    }
+    return out;
+  }
+  function label(mask, width, height, minArea = 1) {
+    const labels = new Int32Array(mask.length);
+    let count = 0;
+    const stack = new Int32Array(mask.length);
+    for (let start = 0; start < mask.length; start++) {
+      if (!mask[start] || labels[start]) continue;
+      count += 1;
+      let sp = 0;
+      stack[sp++] = start;
+      labels[start] = count;
+      let area = 0;
+      while (sp > 0) {
+        const p = stack[--sp];
+        area += 1;
+        const x = p % width;
+        const n = [];
+        if (x > 0) n.push(p - 1);
+        if (x < width - 1) n.push(p + 1);
+        if (p >= width) n.push(p - width);
+        if (p + width < mask.length) n.push(p + width);
+        for (const q of n) {
+          if (mask[q] && !labels[q]) {
+            labels[q] = count;
+            stack[sp++] = q;
+          }
+        }
+      }
+      if (area < minArea) {
+        for (let p = 0; p < mask.length; p++) if (labels[p] === count) labels[p] = 0;
+        count -= 1;
+      }
+    }
+    return { labels, count };
+  }
+  function splitTouching(mask, width, height, { maxErode = 12, minCoreRatio = 0.08 } = {}) {
+    let total = 0;
+    for (let p = 0; p < mask.length; p++) total += mask[p];
+    if (total < 400) return null;
+    let eroded = mask;
+    for (let step = 1; step <= maxErode; step++) {
+      eroded = erode(eroded, width, height);
+      const { labels, count } = label(eroded, width, height, Math.max(30, total * minCoreRatio * 0.25));
+      if (count >= 2) {
+        const assign = new Int32Array(mask.length);
+        const queue = new Int32Array(mask.length);
+        let head = 0;
+        let tail = 0;
+        for (let p = 0; p < mask.length; p++) {
+          if (labels[p]) {
+            assign[p] = labels[p];
+            queue[tail++] = p;
+          }
+        }
+        while (head < tail) {
+          const p = queue[head++];
+          const x = p % width;
+          const n = [];
+          if (x > 0) n.push(p - 1);
+          if (x < width - 1) n.push(p + 1);
+          if (p >= width) n.push(p - width);
+          if (p + width < mask.length) n.push(p + width);
+          for (const q of n) {
+            if (mask[q] && !assign[q]) {
+              assign[q] = assign[p];
+              queue[tail++] = q;
+            }
+          }
+        }
+        const sizes = /* @__PURE__ */ new Map();
+        for (let p = 0; p < mask.length; p++) if (assign[p]) sizes.set(assign[p], (sizes.get(assign[p]) ?? 0) + 1);
+        const big = [...sizes.values()].filter((v) => v >= total * minCoreRatio).length;
+        if (big >= 2) return { assign, count, erodeSteps: step };
+      }
+      let left = 0;
+      for (let p = 0; p < eroded.length; p++) left += eroded[p];
+      if (left < total * 0.2) break;
+    }
+    return null;
+  }
+
   // src/core/motif/MotifExtractor.js
   var MAX_LABEL_SIDE = 320;
-  function buildMask(canvas, { tolerance = 42, alphaThreshold = 24 } = {}) {
+  function buildMask(canvas, { tolerance = 42, alphaThreshold = 96 } = {}) {
+    tolerance = tolerance ?? 42;
     const ratio = Math.min(1, MAX_LABEL_SIDE / Math.max(canvas.width, canvas.height));
     const w = Math.max(1, Math.round(canvas.width * ratio));
     const h = Math.max(1, Math.round(canvas.height * ratio));
@@ -4318,6 +4480,7 @@ output {
     for (let start = 0; start < mask.length; start++) {
       if (!mask[start] || labels[start]) continue;
       current += 1;
+      let edgeContact = 0;
       let minX = width;
       let minY = height;
       let maxX = -1;
@@ -4331,6 +4494,7 @@ output {
         const x = p % width;
         const y = p / width | 0;
         area += 1;
+        if (x <= 1 || x >= width - 2 || y <= 1 || y >= height - 2) edgeContact += 1;
         if (x < minX) minX = x;
         if (y < minY) minY = y;
         if (x > maxX) maxX = x;
@@ -4349,7 +4513,7 @@ output {
           }
         }
       }
-      comps.push({ label: current, minX, minY, maxX, maxY, area });
+      comps.push({ label: current, minX, minY, maxX, maxY, area, edgeContact });
     }
     return { labels, comps };
   }
@@ -4367,12 +4531,21 @@ output {
         changed = false;
         for (let j = 0; j < comps.length; j++) {
           if (used[j]) continue;
-          if (overlaps(group, comps[j])) {
+          if (!overlaps(group, comps[j])) continue;
+          const small = Math.min(group.area, comps[j].area);
+          const large = Math.max(group.area, comps[j].area);
+          if (small > large * 0.04) continue;
+          const big = group.area >= comps[j].area ? group : comps[j];
+          const tiny = group.area >= comps[j].area ? comps[j] : group;
+          const inside = tiny.minX >= big.minX && tiny.maxX <= big.maxX && tiny.minY >= big.minY && tiny.maxY <= big.maxY;
+          if (!inside) continue;
+          {
             group.minX = Math.min(group.minX, comps[j].minX);
             group.minY = Math.min(group.minY, comps[j].minY);
             group.maxX = Math.max(group.maxX, comps[j].maxX);
             group.maxY = Math.max(group.maxY, comps[j].maxY);
             group.area += comps[j].area;
+            group.edgeContact = (group.edgeContact ?? 0) + (comps[j].edgeContact ?? 0);
             group.labels.push(comps[j].label);
             used[j] = true;
             changed = true;
@@ -4388,7 +4561,7 @@ output {
      * 連結成分の統計だけを返す（切り出しは行わない）。
      * 完成した柄は成分が数十個に分かれ、モチーフ素材は数個で収まる。
      */
-    componentStats(canvas, { tolerance = 42, minAreaRatio = 4e-4 } = {}) {
+    componentStats(canvas, { tolerance = null, minAreaRatio = 4e-4 } = {}) {
       const source = !hasAlpha(canvas) ? removeBackgroundColor(canvas, { tolerance }) : canvas;
       const maskInfo = buildMask(source, { tolerance });
       const { comps } = labelComponents(maskInfo);
@@ -4400,15 +4573,62 @@ output {
     /**
      * @returns {Array<{canvas, areaRatio, bounds, name}>}
      */
-    extract(canvas, { maxMotifs = 8, minAreaRatio = 25e-4, tolerance = 42, removeBg = true } = {}) {
+    extract(canvas, { maxMotifs = 8, minAreaRatio = 25e-4, tolerance = null, removeBg = true } = {}) {
       const source = removeBg && !hasAlpha(canvas) ? removeBackgroundColor(canvas, { tolerance }) : canvas;
       const maskInfo = buildMask(source, { tolerance });
       const { labels, comps } = labelComponents(maskInfo);
       if (!comps.length) return [];
       const totalPixels = maskInfo.width * maskInfo.height;
-      const groups = mergeNearby(comps, maskInfo.width, maskInfo.height).filter((g) => g.area / totalPixels >= minAreaRatio).sort((a, b) => b.area - a.area).slice(0, maxMotifs);
+      let groups = mergeNearby(comps, maskInfo.width, maskInfo.height).filter((g) => g.area / totalPixels >= minAreaRatio).sort((a, b) => b.area - a.area).slice(0, maxMotifs);
       const s = maskInfo.scale;
       const labelSet = (g) => new Set(g.labels);
+      const mw = maskInfo.width;
+      const mh = maskInfo.height;
+      const areas = groups.map((g) => g.area).sort((a, b) => a - b);
+      const medianArea = areas.length ? areas[areas.length >> 1] : 0;
+      const expanded = [];
+      for (const g of groups) {
+        if (medianArea > 0 && g.area > medianArea * 1.6) {
+          const set = new Set(g.labels);
+          const w = g.maxX - g.minX + 1;
+          const h = g.maxY - g.minY + 1;
+          const local = new Uint8Array(w * h);
+          for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+              const p = (g.minY + y) * mw + (g.minX + x);
+              if (set.has(labels[p])) local[y * w + x] = 1;
+            }
+          }
+          const split = splitTouching(local, w, h);
+          if (split) {
+            const parts = /* @__PURE__ */ new Map();
+            for (let y = 0; y < h; y++) {
+              for (let x = 0; x < w; x++) {
+                const a = split.assign[y * w + x];
+                if (!a) continue;
+                const gx = g.minX + x;
+                const gy = g.minY + y;
+                let part = parts.get(a);
+                if (!part) {
+                  part = { pixelSet: /* @__PURE__ */ new Set(), labels: g.labels, minX: gx, minY: gy, maxX: gx, maxY: gy, area: 0, edgeContact: 0, split: true };
+                  parts.set(a, part);
+                }
+                part.pixelSet.add(gy * mw + gx);
+                part.area += 1;
+                if (gx < part.minX) part.minX = gx;
+                if (gx > part.maxX) part.maxX = gx;
+                if (gy < part.minY) part.minY = gy;
+                if (gy > part.maxY) part.maxY = gy;
+                if (gx <= 1 || gx >= mw - 2 || gy <= 1 || gy >= mh - 2) part.edgeContact += 1;
+              }
+            }
+            for (const part of parts.values()) expanded.push(part);
+            continue;
+          }
+        }
+        expanded.push(g);
+      }
+      groups = expanded.sort((a, b) => b.area - a.area);
       return groups.map((g, index) => {
         const pad = 2;
         const x0 = Math.max(0, Math.floor((g.minX - pad) * s));
@@ -4420,26 +4640,31 @@ output {
         const out = createCanvas2(w, h);
         const c = ctx2d(out);
         c.drawImage(source, x0, y0, w, h, 0, 0, w, h);
-        if (groups.length > 1) {
+        if (groups.length > 1 || g.pixelSet) {
           const img = c.getImageData(0, 0, w, h);
           const set = labelSet(g);
           for (let y = 0; y < h; y++) {
             for (let x = 0; x < w; x++) {
               const lx = Math.min(maskInfo.width - 1, Math.floor((x + x0) / s));
               const ly = Math.min(maskInfo.height - 1, Math.floor((y + y0) / s));
-              const lab = labels[ly * maskInfo.width + lx];
-              if (lab !== 0 && !set.has(lab)) {
-                img.data[(y * w + x) * 4 + 3] = 0;
-              }
+              const mi = ly * maskInfo.width + lx;
+              const lab = labels[mi];
+              const outside = g.pixelSet ? !g.pixelSet.has(mi) && lab !== 0 : lab !== 0 && !set.has(lab);
+              if (outside) img.data[(y * w + x) * 4 + 3] = 0;
             }
           }
           c.putImageData(img, 0, 0);
         }
         const trimmed = trimTransparent(out);
+        const perimeter = 2 * (w + h);
+        const edgeContact = g.edgeContact ?? 0;
+        const cut = edgeContact > perimeter * 0.08;
         return {
           canvas: trimmed.canvas,
           areaRatio: g.area / totalPixels,
           bounds: { x: x0, y: y0, width: w, height: h },
+          edgeContact,
+          touchesEdge: cut,
           name: `Motif ${index + 1}`
         };
       });
@@ -4468,10 +4693,10 @@ output {
       const colors = merged;
       if (!colors.length) return [];
       const all = [{ r: ground.r, g: ground.g, b: ground.b }, ...colors];
-      const label = new Int16Array(width * height);
-      for (let p = 0, i = 0; p < label.length; p++, i += 4) {
+      const label2 = new Int16Array(width * height);
+      for (let p = 0, i = 0; p < label2.length; p++, i += 4) {
         if (d[i + 3] < 24) {
-          label[p] = 0;
+          label2[p] = 0;
           continue;
         }
         let best = 0;
@@ -4484,15 +4709,15 @@ output {
             best = k;
           }
         }
-        label[p] = best;
+        label2[p] = best;
       }
       const results = [];
       const total = width * height;
       const visited = new Uint8Array(total);
       const stack = new Int32Array(total);
       for (let start = 0; start < total; start++) {
-        if (visited[start] || label[start] === 0) continue;
-        const cls = label[start];
+        if (visited[start] || label2[start] === 0) continue;
+        const cls = label2[start];
         let sp = 0;
         stack[sp++] = start;
         visited[start] = 1;
@@ -4512,7 +4737,7 @@ output {
           if (y > maxY) maxY = y;
           const n = [p - 1, p + 1, p - width, p + width];
           for (const q of n) {
-            if (q < 0 || q >= total || visited[q] || label[q] !== cls) continue;
+            if (q < 0 || q >= total || visited[q] || label2[q] !== cls) continue;
             if (q === p - 1 && x === 0 || q === p + 1 && x === width - 1) continue;
             visited[q] = 1;
             stack[sp++] = q;
@@ -4553,7 +4778,7 @@ output {
 
   // src/core/pattern/AllOverRebuilder.js
   init_SeededRandom();
-  var WORKING_MAX = 1400;
+  var WORKING_MAX = null;
   var AllOverRebuilder = class {
     constructor(engine2) {
       this.engine = engine2;
@@ -4642,7 +4867,7 @@ output {
       const margin = 2;
       const entries = found.map((item, index) => {
         const b = item.bounds ?? { x: 0, y: 0, width: item.canvas.width, height: item.canvas.height };
-        const touchesEdge = b.x <= margin || b.y <= margin || b.x + b.width >= working.width - margin || b.y + b.height >= working.height - margin;
+        const touchesEdge = item.touchesEdge ?? (b.x <= margin || b.y <= margin || b.x + b.width >= working.width - margin || b.y + b.height >= working.height - margin);
         return {
           index,
           canvas: item.canvas,
@@ -4673,7 +4898,7 @@ output {
       let z = 0;
       for (const entry of source) {
         engine2.recipe.placements.push(
-          createPlacement({
+          createPlacement2({
             motifId: motifIds.get(entry.index),
             x: entry.center.x,
             y: entry.center.y,
@@ -4692,7 +4917,7 @@ output {
           const motifId = motifIds.get(candidate.index);
           const target = engine2.recipe.motifs.find((m) => m.id === motifId);
           engine2.recipe.placements.push(
-            createPlacement({
+            createPlacement2({
               motifId,
               x: fragment.center.x,
               y: fragment.center.y,
@@ -4964,22 +5189,43 @@ output {
       centroid
     };
   }
-  function measureNegativeSpace(canvas) {
-    const img = sampleImageData(canvas, 128);
-    const { field, width, height } = inkField(img);
+  function measureNegativeSpace(canvas, { placements = null, unit = null } = {}) {
     const gridW = 16;
     const gridH = 16;
-    const occ = new Array(gridW * gridH).fill(0);
-    const counts = new Array(gridW * gridH).fill(0);
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const cxi = Math.min(gridW - 1, Math.floor(x / width * gridW));
-        const cyi = Math.min(gridH - 1, Math.floor(y / height * gridH));
-        occ[cyi * gridW + cxi] += field[y * width + x];
-        counts[cyi * gridW + cxi] += 1;
+    let filled;
+    if (placements && placements.length >= 3 && unit) {
+      const cells = new Array(gridW * gridH).fill(false);
+      for (const p of placements) {
+        const w = (p.width ?? 0) * (p.scale ?? 1);
+        const h = (p.height ?? 0) * (p.scale ?? 1);
+        const x0 = p.x - w / 2;
+        const y0 = p.y - h / 2;
+        const cx0 = Math.floor(x0 / unit.width * gridW);
+        const cx1 = Math.floor((x0 + w) / unit.width * gridW);
+        const cy0 = Math.floor(y0 / unit.height * gridH);
+        const cy1 = Math.floor((y0 + h) / unit.height * gridH);
+        for (let cy = cy0; cy <= cy1; cy++) {
+          for (let cx = cx0; cx <= cx1; cx++) {
+            cells[(cy % gridH + gridH) % gridH * gridW + (cx % gridW + gridW) % gridW] = true;
+          }
+        }
       }
+      filled = cells;
+    } else {
+      const img = sampleImageData(canvas, 128);
+      const { field, width, height } = inkField(img);
+      const occ = new Array(gridW * gridH).fill(0);
+      const counts = new Array(gridW * gridH).fill(0);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const cxi = Math.min(gridW - 1, Math.floor(x / width * gridW));
+          const cyi = Math.min(gridH - 1, Math.floor(y / height * gridH));
+          occ[cyi * gridW + cxi] += field[y * width + x];
+          counts[cyi * gridW + cxi] += 1;
+        }
+      }
+      filled = occ.map((v, i) => (counts[i] ? v / counts[i] : 0) > 0.06);
     }
-    const filled = occ.map((v, i) => (counts[i] ? v / counts[i] : 0) > 0.06);
     const coverage = filled.filter(Boolean).length / filled.length;
     const onCells = [];
     filled.forEach((f, i) => {
@@ -5062,9 +5308,12 @@ output {
     const totalPairs = Math.max(1, real.length * (real.length - 1) / 2);
     const alignRatio = (alignedPairs("x") + alignedPairs("y")) / (2 * totalPairs);
     const rotations = real.map((p) => (p.rotation % 360 + 360) % 360);
-    const uniqueRot = new Set(rotations.map((r) => Math.round(r / 15))).size;
-    const rotVariety = real.length <= 1 ? 1 : clamp01(uniqueRot / Math.min(real.length, 8));
-    const repetitionVisibility = clamp01(1 - alignRatio * 0.85) * 0.6 + rotVariety * 0.4;
+    const uniqueRot = new Set(rotations.map((r) => Math.round(r / 5))).size;
+    const rotVariety = real.length <= 1 ? 1 : clamp01(uniqueRot / Math.min(real.length, 4));
+    const uniqueMotifs = new Set(real.map((p) => p.motifId)).size;
+    const motifVariety = real.length <= 1 ? 1 : clamp01(uniqueMotifs / Math.min(real.length, 6));
+    const variety = Math.max(rotVariety, motifVariety);
+    const repetitionVisibility = clamp01(1 - alignRatio * 0.85) * 0.6 + variety * 0.4;
     return { motifCut, collision, density, repetitionVisibility, stats: { crossing, uncovered, overlaps, pairs, fill, alignRatio } };
   }
   function inkProfile(canvas, { sample = 220 } = {}) {
@@ -5122,7 +5371,10 @@ output {
   function analyzePattern(canvas, { placements = [], unit, seamlessSettings = {} } = {}) {
     const edge = measureEdgeContinuity(canvas);
     const balance = measureBalance(canvas);
-    const negative = measureNegativeSpace(canvas);
+    const negative = measureNegativeSpace(canvas, {
+      placements: placements.filter((p) => !p.isClone),
+      unit: unit ?? { width: canvas.width, height: canvas.height }
+    });
     const geo = measureGeometry(placements, unit ?? { width: canvas.width, height: canvas.height }, {
       wrapAround: seamlessSettings.wrapAround !== false
     });
@@ -5221,7 +5473,10 @@ output {
         list.push({ ...base, kind: "enlarge", overlap: 0.18, seed: seed + i * 7919, strategy: "straight", label: `2\xD72 \u306B\u62E1\u5F35\uFF08\u7D44\u307F\u65B9 ${i + 1}\uFF09` });
       }
       list.push({ ...base, kind: "enlarge", overlap: 0.18, seed, strategy: "half-drop", label: "2\xD72 \u306B\u62E1\u5F35\uFF0F\u30CF\u30FC\u30D5\u30C9\u30ED\u30C3\u30D7" });
+      list.push({ ...base, kind: "layered", strategy: "straight", label: "\u80CC\u666F\u3068\u7269\u3092\u5206\u3051\u3066\u7E4B\u3050" });
       list.push({ ...base, kind: "rebuild", strategy: "straight", label: "\u7DCF\u67C4\u306B\u7D44\u307F\u76F4\u3059\uFF08\u914D\u7F6E\u3092\u4FDD\u3064\uFF09" });
+      list.push({ ...base, kind: "rescatter", strategy: "all-over", label: "\u5B8C\u5168\u306A\u7269\u3060\u3051\u3067\u6563\u3089\u3057\u76F4\u3059" });
+      list.push({ ...base, kind: "compose", strategy: "straight", label: "\u7DCF\u67C4\u306B\u7D44\u307F\u7ACB\u3066\u308B\uFF08\u683C\u5B50\uFF0B\u6563\u3089\u3057\uFF09" });
       list.push({ ...base, kind: "crop", strategy: "straight", label: "\u5207\u308A\u51FA\u3059\u3060\u3051\u3067\u7E4B\u3052\u308B\uFF08\u52A0\u5DE5\u306A\u3057\uFF09" });
       list.push({ ...base, kind: "period", strategy: "straight", label: "\u67C4\u306E\u5468\u671F\u3067\u5207\u308A\u51FA\u3059" });
       list.push({ kind: "cut", overlap: 0.18, strategy: "straight", rotate: true, label: "90\xB0\u56DE\u3057\u3066\u5207\u308A\u8CBC\u308A" });
@@ -5281,6 +5536,37 @@ output {
         const g = c.applied ? engine2.enlargeRepeat({ factor: 2 }) : { applied: false, reason: c.reason };
         applied = g.applied;
         note = g.applied ? `${g.size.width}\xD7${g.size.height}px` : g.reason;
+      } else if (cand.kind === "layered") {
+        const r = engine2.rebuildLayered(source, {
+          seed: engine2.recipe.randomization.seed,
+          motifColors: engine2.recipe.meta.motifColors ?? null
+        });
+        applied = r.applied;
+        note = r.applied ? r.note : r.reason;
+        if (applied) {
+          const report = engine2.evaluate();
+          const collision = report.metrics?.collision ?? 100;
+          if (collision < 45) {
+            applied = false;
+            note = `\u7269\u304C\u91CD\u306A\u308A\u3059\u304E\u308B\uFF08\u91CD\u306A\u308A ${collision}\uFF09`;
+          }
+        }
+      } else if (cand.kind === "compose") {
+        const r = engine2.composeAllOver(source, { seed: engine2.recipe.randomization.seed });
+        applied = r.applied;
+        note = r.applied ? r.note : r.reason;
+      } else if (cand.kind === "rescatter") {
+        const r = engine2.rescatterObjects(source, { seed: engine2.recipe.randomization.seed });
+        applied = r.applied;
+        note = r.applied ? r.note : r.reason;
+        if (applied) {
+          const report = engine2.evaluate();
+          const collision = report.metrics?.collision ?? 100;
+          if (collision < 90) {
+            applied = false;
+            note = `\u6563\u3089\u3057\u3066\u3082\u91CD\u306A\u308B\uFF08\u91CD\u306A\u308A ${collision}\uFF09`;
+          }
+        }
       } else if (cand.kind === "rebuild") {
         const f = engine2.rebuilder.canRebuild(source);
         if (!f.ok) {
@@ -5324,6 +5610,7 @@ output {
           note = `\u5468\u671F ${px.period}\xD7${py.period}px`;
         }
       }
+      if (applied) engine2.normalizeRepeatSize();
       engine2.markDirty();
       const seam = applied ? engine2.checkSeamless() : { ok: false, percent: 0, reasons: [note || "\u9069\u7528\u3067\u304D\u307E\u305B\u3093"] };
       let naturalness = null;
@@ -5338,10 +5625,11 @@ output {
           engine2.recipe.repeatUnit.width * engine2.recipe.repeatUnit.height / (source.width * source.height)
         );
         const unedited = cand.kind === "crop" || cand.kind === "period";
-        const editPenalty = { crop: 0, period: 0, rebuild: 12, cut: 12, enlarge: 14 }[cand.kind] ?? 12;
+        const editPenalty = { crop: 0, period: 0, layered: 6, rescatter: 8, compose: 9, rebuild: 10, cut: 16, enlarge: 18 }[cand.kind] ?? 16;
         const repPenalty = unedited ? 0 : Math.max(0, rep) * 12;
         naturalness = { banding: band.introduced, periodicity: Math.round(rep * 100) / 100, keep: Math.round(keep * 100) / 100, cutInk };
-        scoreValue += -band.introduced * 150 - repPenalty + Math.min(1, keep) * 8 - editPenalty - (cand.rotate ? 5 : 0) - cutInk * 40;
+        const bandPenalty = ["cut", "enlarge", "crop", "period"].includes(cand.kind) ? band.introduced * 150 : 0;
+        scoreValue += -bandPenalty - repPenalty + Math.min(1, keep) * 8 - editPenalty - (cand.rotate ? 5 : 0) - cutInk * 40;
       }
       const images = engine2.imageStore.list().map((e) => e.id).filter((id) => !beforeIds.has(id));
       const result = {
@@ -5438,296 +5726,10 @@ output {
   };
   function weight(c) {
     if (c.rotate) return 4;
-    return { crop: 0, period: 0, rebuild: 1, cut: 2, enlarge: 3 }[c.kind] ?? 2;
+    return { crop: 0, period: 0, layered: 1, rescatter: 1, compose: 2, rebuild: 1, cut: 2, enlarge: 3 }[c.kind] ?? 2;
   }
   function strategyName(id) {
     return { straight: "\u30B9\u30C8\u30EC\u30FC\u30C8", "half-drop": "\u30CF\u30FC\u30D5\u30C9\u30ED\u30C3\u30D7", "half-brick": "\u30CF\u30FC\u30D5\u30D6\u30EA\u30C3\u30AF" }[id] ?? id;
-  }
-
-  // src/core/image/SeamlessCheck.js
-  init_geometry();
-  var clamp012 = (v) => Math.min(1, Math.max(0, v));
-  function measureSeamPrecision(canvas, { tolerance = 1.15, floor = 4 } = {}) {
-    const img = getImageData(canvas);
-    const { width, height, data } = img;
-    const lum = (x, y) => {
-      const i = (y * width + x) * 4;
-      const a = data[i + 3] / 255;
-      return (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) * a + 255 * (1 - a);
-    };
-    const rowMean = (y0, y1) => {
-      let sum = 0;
-      for (let x = 0; x < width; x++) sum += Math.abs(lum(x, y0) - lum(x, y1));
-      return sum / width;
-    };
-    const colMean = (x0, x1) => {
-      let sum = 0;
-      for (let y = 0; y < height; y++) sum += Math.abs(lum(x0, y) - lum(x1, y));
-      return sum / height;
-    };
-    const rowMeans = [];
-    for (let y = 1; y < height; y++) rowMeans.push(rowMean(y, y - 1));
-    const colMeans = [];
-    for (let x = 1; x < width; x++) colMeans.push(colMean(x, x - 1));
-    const seamRow = rowMean(height - 1, 0);
-    const seamCol = colMean(width - 1, 0);
-    const score = (seamMean, means) => {
-      const sorted = [...means].sort((a, b) => a - b);
-      const p90 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))] ?? 0;
-      const mean = means.reduce((a, b) => a + b, 0) / (means.length || 1);
-      const interiorRef = Math.max(mean, p90);
-      const allowed = interiorRef * tolerance + floor;
-      return {
-        seamDiff: Math.round(seamMean * 100) / 100,
-        interiorDiff: Math.round(interiorRef * 100) / 100,
-        allowed: Math.round(allowed * 100) / 100,
-        pass: seamMean <= allowed,
-        value: clamp012(1 - Math.max(0, seamMean - allowed) / (allowed + 24))
-      };
-    };
-    return { horizontal: score(seamCol, colMeans), vertical: score(seamRow, rowMeans) };
-  }
-  function measureSymmetry(canvas) {
-    const img = getImageData(canvas);
-    const { width, height, data } = img;
-    const lum = (x, y) => {
-      const i = (y * width + x) * 4;
-      return 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-    };
-    const step = Math.max(1, Math.floor(Math.min(width, height) / 160));
-    let lr = 0;
-    let tb = 0;
-    let n = 0;
-    for (let y = 0; y < height; y += step) {
-      for (let x = 0; x < width >> 1; x += step) {
-        lr += Math.abs(lum(x, y) - lum(width - 1 - x, y));
-        n += 1;
-      }
-    }
-    let m = 0;
-    for (let x = 0; x < width; x += step) {
-      for (let y = 0; y < height >> 1; y += step) {
-        tb += Math.abs(lum(x, y) - lum(x, height - 1 - y));
-        m += 1;
-      }
-    }
-    let ref = 0;
-    let k = 0;
-    for (let y = 0; y < height; y += step) {
-      for (let x = 0; x < width; x += step) {
-        const x2 = (x + (width >> 1) + (width >> 3)) % width;
-        ref += Math.abs(lum(x, y) - lum(x2, y));
-        k += 1;
-      }
-    }
-    const leftRight = n ? lr / n : 0;
-    const topBottom = m ? tb / m : 0;
-    const reference = k ? ref / k : 1;
-    const ratioLR = reference > 0 ? leftRight / reference : 1;
-    const ratioTB = reference > 0 ? topBottom / reference : 1;
-    return {
-      leftRight: Math.round(leftRight * 10) / 10,
-      topBottom: Math.round(topBottom * 10) / 10,
-      reference: Math.round(reference * 10) / 10,
-      mirroredLR: ratioLR < 0.35,
-      mirroredTB: ratioTB < 0.35,
-      value: clamp012(Math.min(ratioLR, ratioTB) / 0.6)
-    };
-  }
-  function measureWrapCompleteness(placements, unit) {
-    const real = placements.filter((p) => !p.isWrapClone);
-    let crossing = 0;
-    let missing = 0;
-    for (const p of real) {
-      const b = motifBounds(p);
-      if (b.minX >= 0 && b.minY >= 0 && b.maxX <= unit.width && b.maxY <= unit.height) continue;
-      crossing += 1;
-      if (!placements.some((q) => q.isWrapClone && q.sourceId === p.id)) missing += 1;
-    }
-    return {
-      crossing,
-      missing,
-      value: crossing === 0 ? 1 : clamp012(1 - missing / crossing)
-    };
-  }
-  function checkSeamless({
-    canvas,
-    placements = [],
-    unit,
-    strategy,
-    seamlessSettings = {},
-    source = null
-    // 加工前の画像（あれば、対称が「加工で生まれたか」を判定できる）
-  }) {
-    const reasons = [];
-    if (strategy && strategy.seamlessBake === false) {
-      return {
-        percent: 0,
-        ok: false,
-        applicable: false,
-        reasons: [`${strategy.nameJa || strategy.name}\u306F\u7E70\u308A\u8FD4\u3057\u5358\u4F4D\u306B\u306A\u308A\u307E\u305B\u3093`],
-        detail: {}
-      };
-    }
-    const seam = measureSeamPrecision(canvas);
-    const wrap = measureWrapCompleteness(placements, unit);
-    const symmetry = measureSymmetry(canvas);
-    if (!seam.horizontal.pass) {
-      reasons.push(`\u5DE6\u53F3\u306E\u7D99\u304E\u76EE\u306B\u5DEE\u304C\u3042\u308A\u307E\u3059\uFF08\u7AEF ${seam.horizontal.seamDiff} / \u8A31\u5BB9 ${seam.horizontal.allowed}\uFF09`);
-    }
-    if (!seam.vertical.pass) {
-      reasons.push(`\u4E0A\u4E0B\u306E\u7D99\u304E\u76EE\u306B\u5DEE\u304C\u3042\u308A\u307E\u3059\uFF08\u7AEF ${seam.vertical.seamDiff} / \u8A31\u5BB9 ${seam.vertical.allowed}\uFF09`);
-    }
-    if (wrap.missing > 0) {
-      reasons.push(`\u7AEF\u3092\u307E\u305F\u3050\u30E2\u30C1\u30FC\u30D5 ${wrap.missing} \u500B\u306B\u53CD\u5BFE\u5074\u306E\u8907\u88FD\u304C\u3042\u308A\u307E\u305B\u3093`);
-    }
-    if (seamlessSettings.wrapAround === false && wrap.crossing > 0) {
-      reasons.push("Wrap Around \u304C\u7121\u52B9\u3067\u3059");
-    }
-    const usesMirror = strategy && /^mirror/.test(strategy.id) || seamlessSettings.edgeMode === "mirror" || seamlessSettings.blendEdges === true;
-    let introducedSymmetry = false;
-    if (!usesMirror && source && (symmetry.mirroredLR || symmetry.mirroredTB)) {
-      const before = measureSymmetry(source);
-      introducedSymmetry = symmetry.mirroredLR && !before.mirroredLR || symmetry.mirroredTB && !before.mirroredTB;
-    }
-    if (usesMirror) {
-      reasons.push("\u93E1\u3067\u3064\u306A\u3044\u3067\u3044\u307E\u3059\uFF08\u7AEF\u306F\u5408\u3044\u307E\u3059\u304C\u3001\u9762\u304C\u5BFE\u79F0\u306B\u306A\u308A\u7DCF\u67C4\u3068\u3057\u3066\u4E0D\u53EF\uFF09");
-    } else if (introducedSymmetry) {
-      reasons.push("\u52A0\u5DE5\u3067\u5BFE\u79F0\u304C\u751F\u307E\u308C\u3066\u3044\u307E\u3059\uFF08\u5143\u306E\u7D75\u306B\u306F\u306A\u3044\u93E1\u5408\u308F\u305B\uFF09");
-    }
-    const symmetryValue = usesMirror || introducedSymmetry ? Math.min(0.5, symmetry.value) : 1;
-    const value = Math.min(seam.horizontal.value, seam.vertical.value, wrap.value, symmetryValue);
-    const percent = Math.round(value * 100);
-    const ok = reasons.length === 0 && percent === 100;
-    return {
-      percent: ok ? 100 : Math.min(percent, 99),
-      ok,
-      applicable: true,
-      reasons,
-      detail: { seam, wrap, symmetry }
-    };
-  }
-
-  // src/core/image/BlendEngine.js
-  function blendEdges(canvas, { width = 0.08 } = {}) {
-    const ratio = Math.min(0.45, Math.max(0.01, width));
-    return blendAxis(blendAxis(canvas, "x", ratio), "y", ratio);
-  }
-  function blendAxis(source, axis, ratio) {
-    const w = source.width;
-    const h = source.height;
-    const out = cloneCanvas(source);
-    const c = ctx2d(out);
-    const flipped = createCanvas2(w, h);
-    const fc = ctx2d(flipped);
-    fc.save();
-    if (axis === "x") {
-      fc.translate(w, 0);
-      fc.scale(-1, 1);
-    } else {
-      fc.translate(0, h);
-      fc.scale(1, -1);
-    }
-    fc.drawImage(source, 0, 0);
-    fc.restore();
-    const band = Math.max(0.01, ratio);
-    const grad = axis === "x" ? fc.createLinearGradient(0, 0, w, 0) : fc.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, "rgba(0,0,0,0.5)");
-    grad.addColorStop(band, "rgba(0,0,0,0)");
-    grad.addColorStop(Math.max(band, 1 - band), "rgba(0,0,0,0)");
-    grad.addColorStop(1, "rgba(0,0,0,0.5)");
-    fc.globalCompositeOperation = "destination-in";
-    fc.fillStyle = grad;
-    fc.fillRect(0, 0, w, h);
-    c.drawImage(flipped, 0, 0);
-    return out;
-  }
-
-  // src/core/image/OffsetEngine.js
-  function offsetCanvas(canvas, offsetX = 0.5, offsetY = 0.5) {
-    const w = canvas.width;
-    const h = canvas.height;
-    const dx = Math.round(w * offsetX);
-    const dy = Math.round(h * offsetY);
-    const out = createCanvas2(w, h);
-    const c = ctx2d(out);
-    for (const ox of [-w, 0]) {
-      for (const oy of [-h, 0]) {
-        c.drawImage(canvas, dx + ox, dy + oy);
-      }
-    }
-    return out;
-  }
-  function tileCanvas(canvas, columns = 3, rows = 3) {
-    const out = createCanvas2(canvas.width * columns, canvas.height * rows);
-    const c = ctx2d(out);
-    for (let y = 0; y < rows; y++) {
-      for (let x = 0; x < columns; x++) {
-        c.drawImage(canvas, x * canvas.width, y * canvas.height);
-      }
-    }
-    return out;
-  }
-
-  // src/core/image/SeamlessImage.js
-  init_SeededRandom();
-  function makeSeamlessAllOver(canvas, { band = 0.16, seed = 1, passes = 1, feather = 0.3 } = {}) {
-    const w = canvas.width;
-    const h = canvas.height;
-    if (w < 8 || h < 8) return canvas;
-    const base = offsetCanvas(canvas, 0.5, 0.5);
-    const out = createCanvas2(w, h);
-    const c = ctx2d(out);
-    c.drawImage(base, 0, 0);
-    const rng = new SeededRandom(`${seed}:seamless`);
-    const bandW = Math.max(4, Math.round(w * band));
-    const bandH = Math.max(4, Math.round(h * band));
-    for (let i = 0; i < Math.max(1, passes); i++) {
-      const zoom = rng.float(1.12, 1.45);
-      const patch = transformedCopy(canvas, {
-        rotate180: true,
-        zoom,
-        shiftX: rng.float(-0.12, 0.12),
-        shiftY: rng.float(-0.12, 0.12)
-      });
-      c.drawImage(maskBand(patch, "x", w / 2, bandW, feather), 0, 0);
-      c.drawImage(maskBand(patch, "y", h / 2, bandH, feather), 0, 0);
-    }
-    return out;
-  }
-  function transformedCopy(source, { rotate180 = true, zoom = 1.25, shiftX = 0, shiftY = 0 }) {
-    const w = source.width;
-    const h = source.height;
-    const out = createCanvas2(w, h);
-    const c = ctx2d(out);
-    c.save();
-    c.translate(w / 2 + shiftX * w, h / 2 + shiftY * h);
-    if (rotate180) c.rotate(Math.PI);
-    c.scale(zoom, zoom);
-    c.drawImage(source, -w / 2, -h / 2);
-    c.restore();
-    return out;
-  }
-  function maskBand(patch, axis, center, size, feather = 0.3) {
-    const w = patch.width;
-    const h = patch.height;
-    const masked = createCanvas2(w, h);
-    const mc = ctx2d(masked);
-    mc.drawImage(patch, 0, 0);
-    const half = size / 2;
-    const start = Math.max(0, center - half);
-    const end = Math.min(axis === "x" ? w : h, center + half);
-    const f = Math.min(0.45, Math.max(0.05, feather));
-    const grad = axis === "x" ? mc.createLinearGradient(start, 0, end, 0) : mc.createLinearGradient(0, start, 0, end);
-    grad.addColorStop(0, "rgba(0,0,0,0)");
-    grad.addColorStop(f, "rgba(0,0,0,1)");
-    grad.addColorStop(1 - f, "rgba(0,0,0,1)");
-    grad.addColorStop(1, "rgba(0,0,0,0)");
-    mc.globalCompositeOperation = "destination-in";
-    mc.fillStyle = grad;
-    if (axis === "x") mc.fillRect(start, 0, end - start, h);
-    else mc.fillRect(0, start, w, end - start);
-    return masked;
   }
 
   // src/core/image/QuiltSeamless.js
@@ -5903,6 +5905,1085 @@ output {
     return { applied: true, canvas: out, delta: Math.round(big * 10) / 10 };
   }
 
+  // src/core/image/SeamlessCheck.js
+  init_geometry();
+  var clamp012 = (v) => Math.min(1, Math.max(0, v));
+  function measureSeamVisibility(canvas, { maxColors = 8 } = {}) {
+    const w = canvas.width;
+    const h = canvas.height;
+    const d = getImageData(canvas).data;
+    const pal = extractPalette(canvas, { maxColors }).map((p) => p.rgb);
+    if (pal.length < 2) return { seamV: 0, seamH: 0, interiorMaxV: 1, interiorMaxH: 1, visibleV: false, visibleH: false, value: 1 };
+    const cls = (x, y) => {
+      const i = (y * w + x) * 4;
+      let b = 0;
+      let bd = Infinity;
+      for (let k = 0; k < pal.length; k++) {
+        const c = pal[k];
+        const dd = (d[i] - c.r) ** 2 + (d[i + 1] - c.g) ** 2 + (d[i + 2] - c.b) ** 2;
+        if (dd < bd) {
+          bd = dd;
+          b = k;
+        }
+      }
+      return b;
+    };
+    const stepY = Math.max(1, Math.floor(h / 300));
+    const stepX = Math.max(1, Math.floor(w / 300));
+    const colChange = (x0, x1) => {
+      let n = 0;
+      let t = 0;
+      for (let y = 0; y < h; y += stepY) {
+        if (cls(x0, y) !== cls(x1, y)) n += 1;
+        t += 1;
+      }
+      return n / t;
+    };
+    const rowChange = (y0, y1) => {
+      let n = 0;
+      let t = 0;
+      for (let x = 0; x < w; x += stepX) {
+        if (cls(x, y0) !== cls(x, y1)) n += 1;
+        t += 1;
+      }
+      return n / t;
+    };
+    const seamV = colChange(w - 1, 0);
+    const seamH = rowChange(h - 1, 0);
+    const cols = [];
+    for (let x = 8; x < w - 8; x += Math.max(1, Math.floor(w / 40))) cols.push(colChange(x, x - 1));
+    const rows = [];
+    for (let y = 8; y < h - 8; y += Math.max(1, Math.floor(h / 40))) rows.push(rowChange(y, y - 1));
+    const meanOf = (a) => a.reduce((s, v) => s + v, 0) / (a.length || 1);
+    const interiorMaxV = Math.max(...cols, 0);
+    const interiorMaxH = Math.max(...rows, 0);
+    const allowV = Math.max(interiorMaxV, meanOf(cols) * 1.15 + 0.02);
+    const allowH = Math.max(interiorMaxH, meanOf(rows) * 1.15 + 0.02);
+    const visibleV = seamV > allowV;
+    const visibleH = seamH > allowH;
+    const over = Math.max(0, seamV - allowV, seamH - allowH);
+    return {
+      seamV: Math.round(seamV * 1e3) / 1e3,
+      seamH: Math.round(seamH * 1e3) / 1e3,
+      interiorMaxV: Math.round(interiorMaxV * 1e3) / 1e3,
+      interiorMaxH: Math.round(interiorMaxH * 1e3) / 1e3,
+      visibleV,
+      visibleH,
+      value: clamp012(1 - over / 0.15)
+    };
+  }
+  function measureSeamPrecision(canvas, { tolerance = 1.15, floor = 4 } = {}) {
+    const img = getImageData(canvas);
+    const { width, height, data } = img;
+    const lum = (x, y) => {
+      const i = (y * width + x) * 4;
+      const a = data[i + 3] / 255;
+      return (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) * a + 255 * (1 - a);
+    };
+    const rowMean = (y0, y1) => {
+      let sum = 0;
+      for (let x = 0; x < width; x++) sum += Math.abs(lum(x, y0) - lum(x, y1));
+      return sum / width;
+    };
+    const colMean = (x0, x1) => {
+      let sum = 0;
+      for (let y = 0; y < height; y++) sum += Math.abs(lum(x0, y) - lum(x1, y));
+      return sum / height;
+    };
+    const rowMeans = [];
+    for (let y = 1; y < height; y++) rowMeans.push(rowMean(y, y - 1));
+    const colMeans = [];
+    for (let x = 1; x < width; x++) colMeans.push(colMean(x, x - 1));
+    const seamRow = rowMean(height - 1, 0);
+    const seamCol = colMean(width - 1, 0);
+    const score = (seamMean, means) => {
+      const sorted = [...means].sort((a, b) => a - b);
+      const p90 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))] ?? 0;
+      const mean = means.reduce((a, b) => a + b, 0) / (means.length || 1);
+      const interiorRef = Math.max(mean, p90);
+      const allowed = interiorRef * tolerance + floor;
+      return {
+        seamDiff: Math.round(seamMean * 100) / 100,
+        interiorDiff: Math.round(interiorRef * 100) / 100,
+        allowed: Math.round(allowed * 100) / 100,
+        pass: seamMean <= allowed,
+        value: clamp012(1 - Math.max(0, seamMean - allowed) / (allowed + 24))
+      };
+    };
+    return { horizontal: score(seamCol, colMeans), vertical: score(seamRow, rowMeans) };
+  }
+  function measureSymmetry(canvas) {
+    const img = getImageData(canvas);
+    const { width, height, data } = img;
+    const lum = (x, y) => {
+      const i = (y * width + x) * 4;
+      return 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    };
+    const step = Math.max(1, Math.floor(Math.min(width, height) / 160));
+    let lr = 0;
+    let tb = 0;
+    let n = 0;
+    for (let y = 0; y < height; y += step) {
+      for (let x = 0; x < width >> 1; x += step) {
+        lr += Math.abs(lum(x, y) - lum(width - 1 - x, y));
+        n += 1;
+      }
+    }
+    let m = 0;
+    for (let x = 0; x < width; x += step) {
+      for (let y = 0; y < height >> 1; y += step) {
+        tb += Math.abs(lum(x, y) - lum(x, height - 1 - y));
+        m += 1;
+      }
+    }
+    let ref = 0;
+    let k = 0;
+    for (let y = 0; y < height; y += step) {
+      for (let x = 0; x < width; x += step) {
+        const x2 = (x + (width >> 1) + (width >> 3)) % width;
+        ref += Math.abs(lum(x, y) - lum(x2, y));
+        k += 1;
+      }
+    }
+    const leftRight = n ? lr / n : 0;
+    const topBottom = m ? tb / m : 0;
+    const reference = k ? ref / k : 1;
+    const ratioLR = reference > 0 ? leftRight / reference : 1;
+    const ratioTB = reference > 0 ? topBottom / reference : 1;
+    return {
+      leftRight: Math.round(leftRight * 10) / 10,
+      topBottom: Math.round(topBottom * 10) / 10,
+      reference: Math.round(reference * 10) / 10,
+      mirroredLR: ratioLR < 0.35,
+      mirroredTB: ratioTB < 0.35,
+      value: clamp012(Math.min(ratioLR, ratioTB) / 0.6)
+    };
+  }
+  function measureWrapCompleteness(placements, unit) {
+    const real = placements.filter((p) => !p.isWrapClone);
+    let crossing = 0;
+    let missing = 0;
+    for (const p of real) {
+      const b = motifBounds(p);
+      if (b.minX >= 0 && b.minY >= 0 && b.maxX <= unit.width && b.maxY <= unit.height) continue;
+      crossing += 1;
+      if (!placements.some((q) => q.isWrapClone && q.sourceId === p.id)) missing += 1;
+    }
+    return {
+      crossing,
+      missing,
+      value: crossing === 0 ? 1 : clamp012(1 - missing / crossing)
+    };
+  }
+  function checkSeamless({
+    canvas,
+    placements = [],
+    unit,
+    strategy,
+    seamlessSettings = {},
+    source = null
+    // 加工前の画像（あれば、対称が「加工で生まれたか」を判定できる）
+  }) {
+    const reasons = [];
+    if (strategy && strategy.seamlessBake === false) {
+      return {
+        percent: 0,
+        ok: false,
+        applicable: false,
+        reasons: [`${strategy.nameJa || strategy.name}\u306F\u7E70\u308A\u8FD4\u3057\u5358\u4F4D\u306B\u306A\u308A\u307E\u305B\u3093`],
+        detail: {}
+      };
+    }
+    const seam = measureSeamPrecision(canvas);
+    const wrap2 = measureWrapCompleteness(placements, unit);
+    const symmetry = measureSymmetry(canvas);
+    const visibility = measureSeamVisibility(canvas);
+    if (visibility.visibleV) reasons.push(`\u7E26\u306E\u7D99\u304E\u76EE\u304C\u76EE\u3067\u5206\u304B\u308A\u307E\u3059\uFF08\u8272\u306E\u5207\u308A\u66FF\u308F\u308A ${visibility.seamV} \uFF0F \u5185\u90E8\u306E\u6700\u5927 ${visibility.interiorMaxV}\uFF09`);
+    if (visibility.visibleH) reasons.push(`\u6A2A\u306E\u7D99\u304E\u76EE\u304C\u76EE\u3067\u5206\u304B\u308A\u307E\u3059\uFF08\u8272\u306E\u5207\u308A\u66FF\u308F\u308A ${visibility.seamH} \uFF0F \u5185\u90E8\u306E\u6700\u5927 ${visibility.interiorMaxH}\uFF09`);
+    if (!seam.horizontal.pass) {
+      reasons.push(`\u5DE6\u53F3\u306E\u7D99\u304E\u76EE\u306B\u5DEE\u304C\u3042\u308A\u307E\u3059\uFF08\u7AEF ${seam.horizontal.seamDiff} / \u8A31\u5BB9 ${seam.horizontal.allowed}\uFF09`);
+    }
+    if (!seam.vertical.pass) {
+      reasons.push(`\u4E0A\u4E0B\u306E\u7D99\u304E\u76EE\u306B\u5DEE\u304C\u3042\u308A\u307E\u3059\uFF08\u7AEF ${seam.vertical.seamDiff} / \u8A31\u5BB9 ${seam.vertical.allowed}\uFF09`);
+    }
+    if (wrap2.missing > 0) {
+      reasons.push(`\u7AEF\u3092\u307E\u305F\u3050\u30E2\u30C1\u30FC\u30D5 ${wrap2.missing} \u500B\u306B\u53CD\u5BFE\u5074\u306E\u8907\u88FD\u304C\u3042\u308A\u307E\u305B\u3093`);
+    }
+    if (seamlessSettings.wrapAround === false && wrap2.crossing > 0) {
+      reasons.push("Wrap Around \u304C\u7121\u52B9\u3067\u3059");
+    }
+    const usesMirror = strategy && /^mirror/.test(strategy.id) || seamlessSettings.edgeMode === "mirror" || seamlessSettings.blendEdges === true;
+    let introducedSymmetry = false;
+    if (!usesMirror && source && (symmetry.mirroredLR || symmetry.mirroredTB)) {
+      const before = measureSymmetry(source);
+      introducedSymmetry = symmetry.mirroredLR && !before.mirroredLR || symmetry.mirroredTB && !before.mirroredTB;
+    }
+    if (usesMirror) {
+      reasons.push("\u93E1\u3067\u3064\u306A\u3044\u3067\u3044\u307E\u3059\uFF08\u7AEF\u306F\u5408\u3044\u307E\u3059\u304C\u3001\u9762\u304C\u5BFE\u79F0\u306B\u306A\u308A\u7DCF\u67C4\u3068\u3057\u3066\u4E0D\u53EF\uFF09");
+    } else if (introducedSymmetry) {
+      reasons.push("\u52A0\u5DE5\u3067\u5BFE\u79F0\u304C\u751F\u307E\u308C\u3066\u3044\u307E\u3059\uFF08\u5143\u306E\u7D75\u306B\u306F\u306A\u3044\u93E1\u5408\u308F\u305B\uFF09");
+    }
+    const symmetryValue = usesMirror || introducedSymmetry ? Math.min(0.5, symmetry.value) : 1;
+    const value = Math.min(seam.horizontal.value, seam.vertical.value, wrap2.value, symmetryValue, visibility.value);
+    const percent = Math.round(value * 100);
+    const ok = reasons.length === 0 && percent === 100;
+    return {
+      percent: ok ? 100 : Math.min(percent, 99),
+      ok,
+      applicable: true,
+      reasons,
+      detail: { seam, wrap: wrap2, symmetry, visibility }
+    };
+  }
+
+  // src/core/pattern/LayeredRebuilder.js
+  init_SeededRandom();
+  var WORKING_MAX2 = null;
+  function fillHoles(canvas, holeMask, { seed = 1 } = {}) {
+    const { width, height } = canvas;
+    const img = ctx2d(canvas).getImageData(0, 0, width, height);
+    const d = img.data;
+    const mask = new Uint8Array(holeMask);
+    const total = width * height;
+    const rng = new SeededRandom(`${seed}:fill`);
+    const visited = new Uint8Array(total);
+    const stack = new Int32Array(total);
+    const holes = [];
+    for (let start = 0; start < total; start++) {
+      if (!mask[start] || visited[start]) continue;
+      let sp = 0;
+      stack[sp++] = start;
+      visited[start] = 1;
+      const pixels = [];
+      let minX = width;
+      let minY = height;
+      let maxX = -1;
+      let maxY = -1;
+      while (sp > 0) {
+        const p = stack[--sp];
+        pixels.push(p);
+        const x = p % width;
+        const y = p / width | 0;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+        if (x > 0 && mask[p - 1] && !visited[p - 1]) {
+          visited[p - 1] = 1;
+          stack[sp++] = p - 1;
+        }
+        if (x < width - 1 && mask[p + 1] && !visited[p + 1]) {
+          visited[p + 1] = 1;
+          stack[sp++] = p + 1;
+        }
+        if (p >= width && mask[p - width] && !visited[p - width]) {
+          visited[p - width] = 1;
+          stack[sp++] = p - width;
+        }
+        if (p + width < total && mask[p + width] && !visited[p + width]) {
+          visited[p + width] = 1;
+          stack[sp++] = p + width;
+        }
+      }
+      holes.push({ pixels, minX, minY, maxX, maxY });
+    }
+    const wrapX = (x) => (x % width + width) % width;
+    const wrapY = (y) => (y % height + height) % height;
+    for (const hole of holes) {
+      const ring = [];
+      const inHole = new Set(hole.pixels);
+      for (const p of hole.pixels) {
+        const x = p % width;
+        const y = p / width | 0;
+        for (let dy = -4; dy <= 4; dy++) {
+          for (let dx = -4; dx <= 4; dx++) {
+            if (!dx && !dy) continue;
+            const q = wrapY(y + dy) * width + wrapX(x + dx);
+            if (!mask[q] && !inHole.has(q)) ring.push(q);
+          }
+        }
+      }
+      const ringSample = ring.filter((_, i) => i % 3 === 0);
+      if (!ringSample.length) continue;
+      let best = null;
+      for (let k = 0; k < 240; k++) {
+        const dx = rng.int(-Math.floor(width * 0.45), Math.floor(width * 0.45));
+        const dy = rng.int(-Math.floor(height * 0.45), Math.floor(height * 0.45));
+        if (Math.abs(dx) < 12 && Math.abs(dy) < 12) continue;
+        let dirty = 0;
+        let checked = 0;
+        for (let i = 0; i < hole.pixels.length; i += 5) {
+          const p = hole.pixels[i];
+          const q = wrapY((p / width | 0) + dy) * width + wrapX(p % width + dx);
+          checked += 1;
+          if (mask[q]) dirty += 1;
+        }
+        if (dirty > checked * 0.12) continue;
+        let err = 0;
+        for (const p of ringSample) {
+          const q = wrapY((p / width | 0) + dy) * width + wrapX(p % width + dx);
+          err += Math.abs(d[p * 4] - d[q * 4]) + Math.abs(d[p * 4 + 1] - d[q * 4 + 1]) + Math.abs(d[p * 4 + 2] - d[q * 4 + 2]);
+        }
+        err /= ringSample.length;
+        if (!best || err < best.err) best = { dx, dy, err };
+      }
+      if (!best) continue;
+      const leftover = [];
+      for (const p of hole.pixels) {
+        const q = wrapY((p / width | 0) + best.dy) * width + wrapX(p % width + best.dx);
+        if (mask[q]) {
+          leftover.push(p);
+          continue;
+        }
+        d[p * 4] = d[q * 4];
+        d[p * 4 + 1] = d[q * 4 + 1];
+        d[p * 4 + 2] = d[q * 4 + 2];
+        d[p * 4 + 3] = 255;
+      }
+      for (const p of hole.pixels) if (!leftover.includes(p)) mask[p] = 0;
+      for (let round = 0; round < 12 && leftover.length; round++) {
+        for (let i = leftover.length - 1; i >= 0; i--) {
+          const p = leftover[i];
+          const x = p % width;
+          const y = p / width | 0;
+          const neighbors = [wrapY(y) * width + wrapX(x - 1), wrapY(y) * width + wrapX(x + 1), wrapY(y - 1) * width + x, wrapY(y + 1) * width + x];
+          const src = neighbors.find((q) => !mask[q]);
+          if (src === void 0) continue;
+          d[p * 4] = d[src * 4];
+          d[p * 4 + 1] = d[src * 4 + 1];
+          d[p * 4 + 2] = d[src * 4 + 2];
+          d[p * 4 + 3] = 255;
+          mask[p] = 0;
+          leftover.splice(i, 1);
+        }
+      }
+    }
+    for (let round = 0; round < 40; round++) {
+      let remaining = 0;
+      for (let p = 0; p < total; p++) {
+        if (!mask[p]) continue;
+        const x = p % width;
+        const y = p / width | 0;
+        const neighbors = [wrapY(y) * width + wrapX(x - 1), wrapY(y) * width + wrapX(x + 1), wrapY(y - 1) * width + x, wrapY(y + 1) * width + x];
+        const src = neighbors.find((q) => !mask[q]);
+        if (src === void 0) {
+          remaining += 1;
+          continue;
+        }
+        d[p * 4] = d[src * 4];
+        d[p * 4 + 1] = d[src * 4 + 1];
+        d[p * 4 + 2] = d[src * 4 + 2];
+        d[p * 4 + 3] = 255;
+        mask[p] = 0;
+      }
+      if (!remaining) break;
+    }
+    const out = createCanvas2(width, height);
+    ctx2d(out).putImageData(img, 0, 0);
+    return out;
+  }
+  function componentsFromMask(canvas, mask, { minAreaRatio = 5e-4, maxItems = 150 } = {}) {
+    const { width, height, data } = getImageData(canvas);
+    const total = width * height;
+    const visited = new Uint8Array(total);
+    const stack = new Int32Array(total);
+    const out = [];
+    const pending = [];
+    for (let start = 0; start < total; start++) {
+      if (visited[start] || !mask[start]) continue;
+      let sp = 0;
+      stack[sp++] = start;
+      visited[start] = 1;
+      const pixels = [];
+      let minX = width;
+      let minY = height;
+      let maxX = -1;
+      let maxY = -1;
+      while (sp > 0) {
+        const p = stack[--sp];
+        pixels.push(p);
+        const x = p % width;
+        const y = p / width | 0;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+        if (x > 0 && !visited[p - 1] && mask[p - 1]) {
+          visited[p - 1] = 1;
+          stack[sp++] = p - 1;
+        }
+        if (x < width - 1 && !visited[p + 1] && mask[p + 1]) {
+          visited[p + 1] = 1;
+          stack[sp++] = p + 1;
+        }
+        if (p >= width && !visited[p - width] && mask[p - width]) {
+          visited[p - width] = 1;
+          stack[sp++] = p - width;
+        }
+        if (p + width < total && !visited[p + width] && mask[p + width]) {
+          visited[p + width] = 1;
+          stack[sp++] = p + width;
+        }
+      }
+      if (pixels.length / total < minAreaRatio) continue;
+      const w = maxX - minX + 1;
+      const h = maxY - minY + 1;
+      pending.push({ pixels, minX, minY, maxX, maxY, w, h });
+    }
+    const areasAll = pending.map((q) => q.pixels.length).sort((a, b) => a - b);
+    const medianArea = areasAll.length ? areasAll[areasAll.length >> 1] : 0;
+    const pieces = [];
+    for (const q of pending) {
+      if (medianArea > 0 && q.pixels.length > medianArea * 1.6) {
+        const local = new Uint8Array(q.w * q.h);
+        for (const p of q.pixels) local[(p / width | 0 - q.minY) * q.w + (p % width - q.minX)] = 1;
+        const split = splitTouching(local, q.w, q.h);
+        if (split) {
+          const parts = /* @__PURE__ */ new Map();
+          for (const p of q.pixels) {
+            const lx = p % width - q.minX;
+            const ly = (p / width | 0) - q.minY;
+            const a = split.assign[ly * q.w + lx];
+            if (!a) continue;
+            if (!parts.has(a)) parts.set(a, []);
+            parts.get(a).push(p);
+          }
+          for (const px of parts.values()) {
+            let mnX = width, mnY = height, mxX = -1, mxY = -1;
+            for (const p of px) {
+              const x = p % width;
+              const y = p / width | 0;
+              if (x < mnX) mnX = x;
+              if (x > mxX) mxX = x;
+              if (y < mnY) mnY = y;
+              if (y > mxY) mxY = y;
+            }
+            pieces.push({ pixels: px, minX: mnX, minY: mnY, maxX: mxX, maxY: mxY, w: mxX - mnX + 1, h: mxY - mnY + 1, split: true });
+          }
+          continue;
+        }
+      }
+      pieces.push(q);
+    }
+    for (const q of pieces) {
+      const { pixels, minX, minY, w, h } = q;
+      const c = createCanvas2(w, h);
+      const cc = ctx2d(c);
+      const img = cc.createImageData(w, h);
+      for (const p of pixels) {
+        const x = p % width;
+        const y = p / width | 0;
+        const src = p * 4;
+        const dst = ((y - minY) * w + (x - minX)) * 4;
+        img.data[dst] = data[src];
+        img.data[dst + 1] = data[src + 1];
+        img.data[dst + 2] = data[src + 2];
+        img.data[dst + 3] = 255;
+      }
+      cc.putImageData(img, 0, 0);
+      let edgeContact = 0;
+      for (const p of pixels) {
+        const x = p % width;
+        const y = p / width | 0;
+        if (x <= 1 || x >= width - 2 || y <= 1 || y >= height - 2) edgeContact += 1;
+      }
+      const touchesEdge = edgeContact > 2 * (w + h) * 0.08;
+      out.push({ canvas: c, bounds: { x: minX, y: minY, width: w, height: h }, areaRatio: pixels.length / total, touchesEdge, split: !!q.split });
+    }
+    return out.sort((a, b) => b.areaRatio - a.areaRatio).slice(0, maxItems);
+  }
+  var LayeredRebuilder = class {
+    constructor(engine2) {
+      this.engine = engine2;
+    }
+    /**
+     * 物の色と地の色に分ける。
+     *
+     * 色だけの自動判別は脆い（黒いカラスと暗い迷彩の斑は色空間で近い）。
+     * そこで
+     *   - 利用者が「物の色」を指定できる（色パネルの色見本から）
+     *   - 指定が無ければ「暗いシルエット」を物とみなす（カラス・ロゴ・線画はこの型が多い）
+     */
+    analyze(canvas, { motifColors = null } = {}) {
+      const working = toCanvas(canvas, WORKING_MAX2);
+      const palette = extractPalette(working, { maxColors: 10, mergeDistance: 26, minRatio: 4e-3 });
+      const colors = palette.map((p) => p.rgb);
+      if (colors.length < 2) return { ok: false, reason: "\u8272\u6570\u304C\u8DB3\u308A\u307E\u305B\u3093" };
+      let chosen = [];
+      if (motifColors?.length) {
+        chosen = motifColors.map((hex) => {
+          const n = parseInt(hex.replace("#", ""), 16);
+          return { r: n >> 16 & 255, g: n >> 8 & 255, b: n & 255 };
+        });
+      } else {
+        const dark = palette.map((p, i) => ({ i, lum: 0.299 * p.rgb.r + 0.587 * p.rgb.g + 0.114 * p.rgb.b, ratio: p.ratio })).filter((c) => c.lum < 70 && c.ratio >= 0.02 && c.ratio <= 0.35).sort((a, b) => a.lum - b.lum);
+        if (dark.length) chosen = [colors[dark[0].i]];
+      }
+      if (!chosen.length) return { ok: false, reason: "\u300C\u7269\u300D\u3068\u3057\u3066\u6271\u3046\u8272\u304C\u898B\u3064\u304B\u308A\u307E\u305B\u3093\uFF08\u8272\u30D1\u30CD\u30EB\u3067\u6307\u5B9A\u3067\u304D\u307E\u3059\uFF09" };
+      const { width, height, data } = getImageData(working);
+      const tolerance = 52;
+      const isMotif = new Uint8Array(width * height);
+      let motifArea = 0;
+      const lumOf = (r, g, b) => 0.299 * r + 0.587 * g + 0.114 * b;
+      for (let p = 0, i = 0; p < isMotif.length; p++, i += 4) {
+        for (const c of chosen) {
+          if (Math.hypot(data[i] - c.r, data[i + 1] - c.g, data[i + 2] - c.b) > tolerance) continue;
+          const cl = lumOf(c.r, c.g, c.b);
+          if (cl < 70 && lumOf(data[i], data[i + 1], data[i + 2]) > cl + 14) continue;
+          isMotif[p] = 1;
+          motifArea += 1;
+          break;
+        }
+      }
+      motifArea /= width * height;
+      let ok = motifArea >= 0.01 && motifArea <= 0.45;
+      let reason = ok ? null : `\u7269\u306E\u9762\u7A4D\u304C ${Math.round(motifArea * 100)}% \u3067\u3001\u5C64\u5206\u3051\u306B\u5411\u304D\u307E\u305B\u3093`;
+      if (ok && !motifColors?.length) {
+        const comps = componentsFromMask(working, isMotif, { minAreaRatio: 8e-4, maxItems: 40 });
+        const fills = comps.map((c) => c.areaRatio * width * height / (c.bounds.width * c.bounds.height)).sort((a, b) => a - b);
+        const medianFill = fills.length ? fills[fills.length >> 1] : 0;
+        if (comps.length < 3 || medianFill < 0.28) {
+          ok = false;
+          reason = `\u6697\u3044\u90E8\u5206\u304C\u7DDA\u72B6\uFF08\u5145\u586B\u7387 ${Math.round(medianFill * 100)}%\uFF09\u3067\u3001\u7269\u3068\u3057\u3066\u5206\u3051\u3089\u308C\u307E\u305B\u3093`;
+        }
+      }
+      return {
+        ok,
+        reason,
+        colors,
+        chosen,
+        isMotif,
+        motifArea,
+        working,
+        width,
+        height
+      };
+    }
+    /**
+     * @returns {{applied:boolean, motifs:number, placements:number, replaced:number, note:string}}
+     */
+    rebuild(canvas, { seed = null, motifColors = null } = {}) {
+      const engine2 = this.engine;
+      const a = this.analyze(canvas, { motifColors });
+      if (!a.ok) return { applied: false, reason: a.reason };
+      const { working, width, height, isMotif } = a;
+      const rng = new SeededRandom(seed ?? engine2.recipe.randomization.seed);
+      let grown = new Uint8Array(isMotif);
+      for (let round = 0; round < 3; round++) {
+        const next = new Uint8Array(grown);
+        for (let y = 1; y < height - 1; y++) {
+          for (let x = 1; x < width - 1; x++) {
+            const p = y * width + x;
+            if (grown[p - 1] || grown[p + 1] || grown[p - width] || grown[p + width]) next[p] = 1;
+          }
+        }
+        grown = next;
+      }
+      const background = fillHoles(working, grown, { seed: seed ?? engine2.recipe.randomization.seed });
+      let bgTile = null;
+      let bgBest = Infinity;
+      const widths = [0.15, 0.2, 0.26, 0.34, 0.42];
+      for (const ox of widths) {
+        for (const oy of widths) {
+          const t = makeTileableByCut(background, { overlapX: ox, overlapY: oy });
+          const m = measureSeamPrecision(t);
+          const v = measureSeamVisibility(t);
+          const overV = Math.max(0, v.seamV - v.interiorMaxV);
+          const overH = Math.max(0, v.seamH - v.interiorMaxH);
+          const score = m.horizontal.seamDiff + m.vertical.seamDiff + (overV + overH) * 400 + (ox + oy) * 12;
+          if (score < bgBest) {
+            bgBest = score;
+            bgTile = t;
+          }
+        }
+      }
+      const items = componentsFromMask(working, isMotif, { minAreaRatio: 5e-4, maxItems: 150 });
+      if (items.length < 3) return { applied: false, reason: `\u7269\u304C ${items.length} \u500B\u3057\u304B\u53D6\u308C\u307E\u305B\u3093` };
+      const unit = engine2.recipe.repeatUnit;
+      const cmPerPx = engine2.recipe.canvas.physicalWidthCm / unit.width;
+      const bgEntry = engine2.imageStore.add(bgTile, { name: "\u80CC\u666F\u5C64\uFF08\u30C6\u30AF\u30B9\u30C1\u30E3\u30FB\u7E4B\u304E\u6E08\u307F\uFF09" });
+      unit.width = bgTile.width;
+      unit.height = bgTile.height;
+      engine2.recipe.canvas.physicalWidthCm = Math.round(bgTile.width * cmPerPx * 100) / 100;
+      engine2.recipe.canvas.physicalHeightCm = Math.round(bgTile.height * cmPerPx * 100) / 100;
+      engine2.recipe.background = {
+        ...engine2.recipe.background,
+        type: "image",
+        imageId: bgEntry.id,
+        imageFit: "stretch",
+        palette: null
+      };
+      engine2.recipe.seamlessSettings = { ...engine2.recipe.seamlessSettings, wrapAround: true, edgeMode: "none", blendEdges: false };
+      engine2.recipe.motifs = [];
+      engine2.recipe.placements = [];
+      const margin = 2;
+      const entries = items.map((it, index) => {
+        const b = it.bounds;
+        const touchesEdge = b.x <= margin || b.y <= margin || b.x + b.width >= width - margin || b.y + b.height >= height - margin;
+        return { index, canvas: it.canvas, center: { x: b.x + b.width / 2, y: b.y + b.height / 2 }, size: Math.max(b.width, b.height), area: it.areaRatio, touchesEdge };
+      });
+      const complete = entries.filter((e) => !e.touchesEdge);
+      const fragments = entries.filter((e) => e.touchesEdge);
+      const source = complete.length ? complete : entries;
+      const motifIds = /* @__PURE__ */ new Map();
+      for (const en of source) {
+        const image = engine2.imageStore.add(en.canvas, { name: `Motif ${en.index + 1}` });
+        const motif = createMotif({ name: `Motif ${en.index + 1}`, sourceImage: image.id, width: en.canvas.width, height: en.canvas.height, scale: 1, weight: Math.max(5, Math.round(en.area * 1e3)) });
+        engine2.recipe.motifs.push(motif);
+        motifIds.set(en.index, motif.id);
+      }
+      const inside = (x, y) => x < unit.width && y < unit.height;
+      const wrapX = (x) => x;
+      const wrapY = (y) => y;
+      let z = 0;
+      for (const en of source) {
+        if (!inside(en.center.x, en.center.y)) continue;
+        engine2.recipe.placements.push(createPlacement2({ motifId: motifIds.get(en.index), x: en.center.x, y: en.center.y, width: en.canvas.width, height: en.canvas.height, scale: 1, rotation: 0, zIndex: z++ }));
+      }
+      let replaced = 0;
+      const sizes = complete.map((c) => c.size).sort((x, y) => x - y);
+      const medianSize = sizes.length ? sizes[sizes.length >> 1] : 0;
+      const overlaps = (x, y, w, h) => engine2.recipe.placements.some((pl) => {
+        const dx = Math.min(x + w / 2, pl.x + pl.width * pl.scale / 2) - Math.max(x - w / 2, pl.x - pl.width * pl.scale / 2);
+        const dy = Math.min(y + h / 2, pl.y + pl.height * pl.scale / 2) - Math.max(y - h / 2, pl.y - pl.height * pl.scale / 2);
+        if (dx <= 0 || dy <= 0) return false;
+        return dx * dy / (w * h) > 0.25;
+      });
+      if (complete.length) {
+        for (const fr of fragments) {
+          if (fr.size >= medianSize * 0.7) continue;
+          let best = complete[0];
+          let bd = Infinity;
+          for (const c of [...complete].sort(() => rng.float(-1, 1))) {
+            const d = Math.abs(c.size - fr.size);
+            if (d < bd) {
+              bd = d;
+              best = c;
+            }
+          }
+          const target = engine2.recipe.motifs.find((m) => m.id === motifIds.get(best.index));
+          if (!inside(fr.center.x, fr.center.y)) continue;
+          const px = fr.center.x;
+          const py = fr.center.y;
+          const sc = Math.min(1.3, Math.max(0.7, fr.size / best.size));
+          if (overlaps(px, py, target.width * sc, target.height * sc)) continue;
+          engine2.recipe.placements.push(createPlacement2({ motifId: target.id, x: px, y: py, width: target.width, height: target.height, scale: sc, rotation: 0, zIndex: z++ }));
+          replaced += 1;
+        }
+      }
+      engine2.markDirty();
+      return {
+        applied: true,
+        motifs: engine2.recipe.motifs.length,
+        placements: engine2.recipe.placements.length,
+        replaced,
+        unit: { width: unit.width, height: unit.height },
+        note: `\u80CC\u666F\u5C64\u3092\u7E4B\u304E\u3001\u7269 ${engine2.recipe.motifs.length} \u7A2E\u3092\u5143\u306E\u4F4D\u7F6E\u306B\u914D\u7F6E${replaced ? `\uFF0F\u7AEF\u3067\u5207\u308C\u305F ${replaced} \u70B9\u3092\u5B8C\u5168\u306A\u5F62\u306B\u5DEE\u3057\u66FF\u3048` : ""}`
+      };
+    }
+  };
+
+  // src/core/pattern/AllOverComposer.js
+  init_SeededRandom();
+  var AllOverComposer = class {
+    constructor(engine2) {
+      this.engine = engine2;
+    }
+    /**
+     * 総柄に組める絵かどうか。
+     * 丸ごとの物が1つ以上あれば組める（1点ものでも、並べれば総柄になる）。
+     */
+    analyze(canvas) {
+      const working = toCanvas(canvas);
+      const found = MotifExtractor.extract(working, { maxMotifs: 60, minAreaRatio: 6e-4 });
+      const whole = found.filter((f) => !f.touchesEdge);
+      const coverage = found.reduce((a, f) => a + f.areaRatio, 0);
+      return {
+        ok: whole.length >= 1,
+        reason: whole.length ? null : "\u4E38\u3054\u3068\u306E\u7269\u304C\u53D6\u308A\u51FA\u305B\u307E\u305B\u3093\uFF08\u5730\u3068\u67C4\u306E\u5DEE\u304C\u5C0F\u3055\u3044\u7D75\u3067\u3059\uFF09",
+        found,
+        whole,
+        coverage,
+        working
+      };
+    }
+    /**
+     * @param {HTMLCanvasElement} canvas
+     * @param {{perUnit?:number, seed?:number, lattice?:'half-drop'|'half-brick'|'tossed', jitter?:number}} options
+     *   perUnit … 1リピートに主役を何個置くか（2 なら 2×2 の格子）
+     */
+    compose(canvas, { perUnit = 3, seed = null, lattice = "half-drop", jitter = 0.18 } = {}) {
+      const engine2 = this.engine;
+      const a = this.analyze(canvas);
+      if (!a.ok) return { applied: false, reason: a.reason };
+      const { working, whole, found } = a;
+      const rng = new SeededRandom(seed ?? engine2.recipe.randomization.seed);
+      const sorted = [...whole].sort((x, y) => y.areaRatio - x.areaRatio);
+      const mainCount = Math.max(1, Math.min(4, Math.round(sorted.length / 4)));
+      const mains = sorted.slice(0, mainCount);
+      const fillers = sorted.slice(mainCount);
+      const mainSize = Math.max(...mains.map((m) => Math.max(m.canvas.width, m.canvas.height)));
+      const unitSize = Math.round(mainSize * perUnit * 1.25);
+      const unit = engine2.recipe.repeatUnit;
+      unit.width = unitSize;
+      unit.height = unitSize;
+      engine2.normalizeRepeatSize?.();
+      const ground = estimateGroundColor(working);
+      engine2.recipe.background = {
+        ...engine2.recipe.background,
+        type: "color",
+        color: ground.hex,
+        imageId: null,
+        palette: null
+      };
+      engine2.recipe.seamlessSettings = {
+        ...engine2.recipe.seamlessSettings,
+        wrapAround: true,
+        edgeMode: "none",
+        blendEdges: false
+      };
+      engine2.recipe.constraints.allOverOnly = true;
+      engine2.recipe.repeatStrategy = "straight";
+      engine2.recipe.motifs = [];
+      engine2.recipe.placements = [];
+      const register = (item, index) => {
+        const image = engine2.imageStore.add(item.canvas, { name: `Motif ${index + 1}` });
+        const motif = createMotif({
+          name: `Motif ${index + 1}`,
+          sourceImage: image.id,
+          width: item.canvas.width,
+          height: item.canvas.height,
+          scale: 1,
+          weight: 10
+        });
+        engine2.recipe.motifs.push(motif);
+        return motif;
+      };
+      const mainMotifs = mains.map(register);
+      const fillerMotifs = fillers.slice(0, 12).map((f, i) => register(f, mains.length + i));
+      const cell = unitSize / perUnit;
+      let z = 0;
+      for (let col = 0; col < perUnit; col++) {
+        for (let row = 0; row < perUnit; row++) {
+          const motif = mainMotifs[(col * perUnit + row) % mainMotifs.length];
+          const dropOffset = lattice === "half-drop" ? col % 2 * (cell / 2) : lattice === "half-brick" ? 0 : 0;
+          const brickOffset = lattice === "half-brick" ? row % 2 * (cell / 2) : 0;
+          const jx = rng.float(-jitter, jitter) * cell;
+          const jy = rng.float(-jitter, jitter) * cell;
+          const x = (col + 0.5) * cell + brickOffset + jx;
+          const y = (row + 0.5) * cell + dropOffset + jy;
+          engine2.recipe.placements.push(
+            createPlacement2({
+              motifId: motif.id,
+              x: (x % unitSize + unitSize) % unitSize,
+              y: (y % unitSize + unitSize) % unitSize,
+              width: motif.width,
+              height: motif.height,
+              scale: 1,
+              rotation: rng.float(-10, 10),
+              zIndex: z++
+            })
+          );
+        }
+      }
+      engine2.recipe.collision = {
+        ...engine2.recipe.collision ?? {},
+        enabled: true,
+        mode: "avoid",
+        padding: Math.round(cell * 0.06)
+      };
+      engine2.markDirty();
+      engine2.separateOverlaps({ padding: Math.round(cell * 0.05) });
+      const added = fillerMotifs.length ? engine2.fillGaps({ target: 97, maxAdd: perUnit * perUnit * 3 }) : 0;
+      engine2.separateOverlaps({ padding: Math.round(cell * 0.04) });
+      return {
+        applied: true,
+        motifs: engine2.recipe.motifs.length,
+        placements: engine2.recipe.placements.length,
+        mains: mains.length,
+        fillers: fillerMotifs.length,
+        added,
+        unit: { width: unit.width, height: unit.height },
+        note: `\u4E38\u3054\u3068\u306E\u7269 ${whole.length}/${found.length} \u3092\u4F7F\u7528\uFF08\u4E3B\u5F79 ${mains.length}\u30FB\u8107\u5F79 ${fillerMotifs.length}\uFF09\uFF0F${perUnit}\xD7${perUnit} \u306E${lattice === "half-drop" ? "\u30CF\u30FC\u30D5\u30C9\u30ED\u30C3\u30D7" : lattice === "half-brick" ? "\u30CF\u30FC\u30D5\u30D6\u30EA\u30C3\u30AF" : "\u6563\u3089\u3057"}\u683C\u5B50\uFF0B\u7A7A\u767D\u306B ${added} \u70B9`
+      };
+    }
+    /**
+     * 何通りか組んで、いちばん点数の高いものを採る。
+     * 1個ずつ置く個数・格子・散らし量を変える。
+     */
+    composeBest(canvas, { target = 98, seed = null } = {}) {
+      const engine2 = this.engine;
+      const variants = [];
+      for (const perUnit of [2, 3, 4]) {
+        for (const lattice of ["half-drop", "half-brick"]) {
+          for (const jitter of [0.1, 0.2]) variants.push({ perUnit, lattice, jitter });
+        }
+      }
+      let best = null;
+      for (const [i, v] of variants.entries()) {
+        const r = this.compose(canvas, { ...v, seed: (seed ?? engine2.recipe.randomization.seed) + i * 7919 });
+        if (!r.applied) return r;
+        const report = engine2.evaluate();
+        const seam = engine2.checkSeamless();
+        const score = seam.ok ? report.score : report.score * 0.5;
+        if (!best || score > best.score) best = { score, snapshot: engine2.snapshot(), result: r, report, seam };
+        if (best.score >= target) break;
+      }
+      if (best) engine2.setRecipe(best.snapshot);
+      return { ...best.result, score: best.score, seamless: best.seam.percent };
+    }
+  };
+
+  // src/core/pattern/PatternEngine.js
+  init_SeededRandom();
+
+  // src/core/image/BlendEngine.js
+  function blendEdges(canvas, { width = 0.08 } = {}) {
+    const ratio = Math.min(0.45, Math.max(0.01, width));
+    return blendAxis(blendAxis(canvas, "x", ratio), "y", ratio);
+  }
+  function blendAxis(source, axis, ratio) {
+    const w = source.width;
+    const h = source.height;
+    const out = cloneCanvas(source);
+    const c = ctx2d(out);
+    const flipped = createCanvas2(w, h);
+    const fc = ctx2d(flipped);
+    fc.save();
+    if (axis === "x") {
+      fc.translate(w, 0);
+      fc.scale(-1, 1);
+    } else {
+      fc.translate(0, h);
+      fc.scale(1, -1);
+    }
+    fc.drawImage(source, 0, 0);
+    fc.restore();
+    const band = Math.max(0.01, ratio);
+    const grad = axis === "x" ? fc.createLinearGradient(0, 0, w, 0) : fc.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, "rgba(0,0,0,0.5)");
+    grad.addColorStop(band, "rgba(0,0,0,0)");
+    grad.addColorStop(Math.max(band, 1 - band), "rgba(0,0,0,0)");
+    grad.addColorStop(1, "rgba(0,0,0,0.5)");
+    fc.globalCompositeOperation = "destination-in";
+    fc.fillStyle = grad;
+    fc.fillRect(0, 0, w, h);
+    c.drawImage(flipped, 0, 0);
+    return out;
+  }
+
+  // src/core/image/OffsetEngine.js
+  function offsetCanvas(canvas, offsetX = 0.5, offsetY = 0.5) {
+    const w = canvas.width;
+    const h = canvas.height;
+    const dx = Math.round(w * offsetX);
+    const dy = Math.round(h * offsetY);
+    const out = createCanvas2(w, h);
+    const c = ctx2d(out);
+    for (const ox of [-w, 0]) {
+      for (const oy of [-h, 0]) {
+        c.drawImage(canvas, dx + ox, dy + oy);
+      }
+    }
+    return out;
+  }
+  function tileCanvas(canvas, columns = 3, rows = 3) {
+    const out = createCanvas2(canvas.width * columns, canvas.height * rows);
+    const c = ctx2d(out);
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < columns; x++) {
+        c.drawImage(canvas, x * canvas.width, y * canvas.height);
+      }
+    }
+    return out;
+  }
+
+  // src/core/image/SeamlessImage.js
+  init_SeededRandom();
+  function makeSeamlessAllOver(canvas, { band = 0.16, seed = 1, passes = 1, feather = 0.3 } = {}) {
+    const w = canvas.width;
+    const h = canvas.height;
+    if (w < 8 || h < 8) return canvas;
+    const base = offsetCanvas(canvas, 0.5, 0.5);
+    const out = createCanvas2(w, h);
+    const c = ctx2d(out);
+    c.drawImage(base, 0, 0);
+    const rng = new SeededRandom(`${seed}:seamless`);
+    const bandW = Math.max(4, Math.round(w * band));
+    const bandH = Math.max(4, Math.round(h * band));
+    for (let i = 0; i < Math.max(1, passes); i++) {
+      const zoom = rng.float(1.12, 1.45);
+      const patch = transformedCopy(canvas, {
+        rotate180: true,
+        zoom,
+        shiftX: rng.float(-0.12, 0.12),
+        shiftY: rng.float(-0.12, 0.12)
+      });
+      c.drawImage(maskBand(patch, "x", w / 2, bandW, feather), 0, 0);
+      c.drawImage(maskBand(patch, "y", h / 2, bandH, feather), 0, 0);
+    }
+    return out;
+  }
+  function transformedCopy(source, { rotate180 = true, zoom = 1.25, shiftX = 0, shiftY = 0 }) {
+    const w = source.width;
+    const h = source.height;
+    const out = createCanvas2(w, h);
+    const c = ctx2d(out);
+    c.save();
+    c.translate(w / 2 + shiftX * w, h / 2 + shiftY * h);
+    if (rotate180) c.rotate(Math.PI);
+    c.scale(zoom, zoom);
+    c.drawImage(source, -w / 2, -h / 2);
+    c.restore();
+    return out;
+  }
+  function maskBand(patch, axis, center, size, feather = 0.3) {
+    const w = patch.width;
+    const h = patch.height;
+    const masked = createCanvas2(w, h);
+    const mc = ctx2d(masked);
+    mc.drawImage(patch, 0, 0);
+    const half = size / 2;
+    const start = Math.max(0, center - half);
+    const end = Math.min(axis === "x" ? w : h, center + half);
+    const f = Math.min(0.45, Math.max(0.05, feather));
+    const grad = axis === "x" ? mc.createLinearGradient(start, 0, end, 0) : mc.createLinearGradient(0, start, 0, end);
+    grad.addColorStop(0, "rgba(0,0,0,0)");
+    grad.addColorStop(f, "rgba(0,0,0,1)");
+    grad.addColorStop(1 - f, "rgba(0,0,0,1)");
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    mc.globalCompositeOperation = "destination-in";
+    mc.fillStyle = grad;
+    if (axis === "x") mc.fillRect(start, 0, end - start, h);
+    else mc.fillRect(0, start, w, end - start);
+    return masked;
+  }
+
+  // src/core/image/Resampler.js
+  function lanczos(x, a = 3) {
+    if (x === 0) return 1;
+    if (x <= -a || x >= a) return 0;
+    const px = Math.PI * x;
+    return a * Math.sin(px) * Math.sin(px / a) / (px * px);
+  }
+  function buildWeights(inSize, outSize, a = 3) {
+    const scale = inSize / outSize;
+    const support = scale > 1 ? a * scale : a;
+    const table = new Array(outSize);
+    for (let o = 0; o < outSize; o++) {
+      const center = (o + 0.5) * scale - 0.5;
+      const lo = Math.floor(center - support);
+      const hi = Math.ceil(center + support);
+      const idx = [];
+      const w = [];
+      let sum = 0;
+      for (let i = lo; i <= hi; i++) {
+        const weight2 = lanczos((i - center) / (scale > 1 ? scale : 1), a);
+        if (weight2 === 0) continue;
+        idx.push((i % inSize + inSize) % inSize);
+        w.push(weight2);
+        sum += weight2;
+      }
+      table[o] = { idx, w: w.map((v) => v / sum) };
+    }
+    return table;
+  }
+  function resampleLanczos(canvas, outW, outH, { sharpen = 0.35 } = {}) {
+    const inW = canvas.width;
+    const inH = canvas.height;
+    const src = ctx2d(canvas).getImageData(0, 0, inW, inH).data;
+    const wx = buildWeights(inW, outW);
+    const tmp = new Float32Array(outW * inH * 4);
+    for (let y = 0; y < inH; y++) {
+      const row = y * inW * 4;
+      for (let x = 0; x < outW; x++) {
+        const { idx, w } = wx[x];
+        let r = 0;
+        let g = 0;
+        let b = 0;
+        let a = 0;
+        for (let k = 0; k < idx.length; k++) {
+          const p = row + idx[k] * 4;
+          const wk = w[k];
+          r += src[p] * wk;
+          g += src[p + 1] * wk;
+          b += src[p + 2] * wk;
+          a += src[p + 3] * wk;
+        }
+        const q = (y * outW + x) * 4;
+        tmp[q] = r;
+        tmp[q + 1] = g;
+        tmp[q + 2] = b;
+        tmp[q + 3] = a;
+      }
+    }
+    const wy = buildWeights(inH, outH);
+    const out = createCanvas2(outW, outH);
+    const octx = ctx2d(out);
+    const img = octx.createImageData(outW, outH);
+    const d = img.data;
+    for (let x = 0; x < outW; x++) {
+      for (let y = 0; y < outH; y++) {
+        const { idx, w } = wy[y];
+        let r = 0;
+        let g = 0;
+        let b = 0;
+        let a = 0;
+        for (let k = 0; k < idx.length; k++) {
+          const p = (idx[k] * outW + x) * 4;
+          const wk = w[k];
+          r += tmp[p] * wk;
+          g += tmp[p + 1] * wk;
+          b += tmp[p + 2] * wk;
+          a += tmp[p + 3] * wk;
+        }
+        const q = (y * outW + x) * 4;
+        d[q] = clamp2(r);
+        d[q + 1] = clamp2(g);
+        d[q + 2] = clamp2(b);
+        d[q + 3] = clamp2(a);
+      }
+    }
+    octx.putImageData(img, 0, 0);
+    return sharpen > 0 ? unsharpMask(out, { amount: sharpen }) : out;
+  }
+  function clamp2(v) {
+    return v < 0 ? 0 : v > 255 ? 255 : Math.round(v);
+  }
+  function unsharpMask(canvas, { amount = 0.35 } = {}) {
+    const w = canvas.width;
+    const h = canvas.height;
+    const c = ctx2d(canvas);
+    const img = c.getImageData(0, 0, w, h);
+    const s = img.data;
+    const out = new Uint8ClampedArray(s.length);
+    const wrapX = (x) => (x % w + w) % w;
+    const wrapY = (y) => (y % h + h) % h;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const q = (y * w + x) * 4;
+        for (let ch = 0; ch < 3; ch++) {
+          let blur = 0;
+          let ws = 0;
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              const wk = dx === 0 && dy === 0 ? 4 : dx === 0 || dy === 0 ? 2 : 1;
+              blur += s[(wrapY(y + dy) * w + wrapX(x + dx)) * 4 + ch] * wk;
+              ws += wk;
+            }
+          }
+          blur /= ws;
+          const v = s[q + ch] + (s[q + ch] - blur) * amount;
+          out[q + ch] = v < 0 ? 0 : v > 255 ? 255 : v;
+        }
+        out[q + 3] = s[q + 3];
+      }
+    }
+    img.data.set(out);
+    c.putImageData(img, 0, 0);
+    return canvas;
+  }
+
   // src/core/image/TileEnlarger.js
   init_SeededRandom();
   function joinTwo(a, b, axis, overlap, feather = 2) {
@@ -5979,6 +7060,8 @@ output {
       this.history = new HistoryManager();
       this.rebuilder = new AllOverRebuilder(this);
       this.planner = new CandidatePlanner(this);
+      this.layered = new LayeredRebuilder(this);
+      this.composer = new AllOverComposer(this);
       this.version = 0;
       this._unitCache = null;
       this._listeners = /* @__PURE__ */ new Set();
@@ -6003,9 +7086,9 @@ output {
     }
     // ---- undo / redo ----------------------------------------------------
     /** 変更を加える直前に呼ぶ。coalesce=true で連続操作をまとめる */
-    pushHistory(label, { coalesce = false } = {}) {
-      if (coalesce) this.history.pushCoalesced(this.recipe, label);
-      else this.history.push(this.recipe, label);
+    pushHistory(label2, { coalesce = false } = {}) {
+      if (coalesce) this.history.pushCoalesced(this.recipe, label2);
+      else this.history.push(this.recipe, label2);
     }
     undo() {
       const entry = this.history.undo(this.recipe);
@@ -6178,9 +7261,10 @@ output {
         for (const value of widths) {
           const probe = makeTileableByCut(source, { overlap: value, feather });
           const seam = measureSeamPrecision(probe);
+          const vis = measureSeamVisibility(probe);
           const ink = probe._cutInk ?? 0;
-          const scoreX = -seam.horizontal.seamDiff - ink * 6;
-          const scoreY = -seam.vertical.seamDiff - ink * 6;
+          const scoreX = -seam.horizontal.seamDiff - ink * 6 - Math.max(0, vis.seamV - vis.interiorMaxV) * 200;
+          const scoreY = -seam.vertical.seamDiff - ink * 6 - Math.max(0, vis.seamH - vis.interiorMaxH) * 200;
           if (scoreX > bestX.value) bestX = { value: scoreX, width: value };
           if (scoreY > bestY.value) bestY = { value: scoreY, width: value };
         }
@@ -6237,17 +7321,7 @@ output {
       this.recipe.seamlessSettings.edgeMode = "none";
       this.recipe.seamlessSettings.blendEdges = false;
       this.markDirty();
-      let fallback = null;
-      if (verify) {
-        const seam = this.checkSeamless();
-        if (!seam.ok) {
-          this.recipe.seamlessSettings.edgeMode = "all-over";
-          this.recipe.seamlessSettings.blendEdges = false;
-          this.recipe.seamlessSettings.blendWidth = 0.2;
-          this.markDirty();
-          fallback = this.checkSeamless().ok ? "all-over" : "failed";
-        }
-      }
+      const fallback = verify && !this.checkSeamless().ok ? "failed" : null;
       const banding = measureIntroducedBanding(source, tile);
       return {
         applied: true,
@@ -6303,6 +7377,252 @@ output {
       };
     }
     /**
+     * 配置を採点しながら詰めて、総合スコアを目標（既定 98）まで上げる。
+     *
+     * 散らし配置の Recipe（洋服モード・散らし直し）は Seed とばらつきを変えて何度も作り直し、
+     * いちばん良いものを採る。位置を保つ Recipe（層分け・組み直し）は、位置を動かさずに
+     * 重なりだけを解く（`separateOverlaps`）。
+     */
+    optimizeLayout({ target = 100, tries = 14 } = {}) {
+      const recipe2 = this.recipe;
+      if (!recipe2.placements.length) return { score: this.evaluate().score, tries: 0 };
+      const fixedLayout = ["layered", "rebuild"].includes(recipe2.meta.seamMethod);
+      if (fixedLayout) {
+        this.separateOverlaps();
+        const added = this.fillGaps({ target: 97 });
+        this.separateOverlaps();
+        return { score: this.evaluate().score, tries: 0, fixed: true, added };
+      }
+      let best = { score: this.evaluate().score, snapshot: this.snapshot() };
+      if (best.score >= target) return { score: best.score, tries: 0 };
+      const baseSeed = recipe2.randomization.seed;
+      const variants = [
+        {},
+        { randomPosition: 0.35 },
+        { randomPosition: 0.55, rotationVariation: Math.max(recipe2.generator.rotationVariation, 12) },
+        { randomPosition: 0.7, scaleVariation: Math.max(recipe2.generator.scaleVariation, 0.15) },
+        { randomPosition: 0.5, density: Math.min(1, recipe2.generator.density * 1.15) },
+        { randomPosition: 0.6, density: Math.max(0.2, recipe2.generator.density * 0.9) }
+      ];
+      for (let i = 0; i < tries; i++) {
+        const v = variants[i % variants.length];
+        Object.assign(recipe2.generator, v);
+        recipe2.collision = { ...recipe2.collision ?? {}, enabled: true, mode: "avoid", padding: Math.max(recipe2.collision?.padding ?? 8, 10) };
+        this.generate({ seed: baseSeed + (i + 1) * 7919 >>> 0 });
+        this.separateOverlaps();
+        this.fillGaps({ target: 97 });
+        this.separateOverlaps();
+        const score = this.evaluate().score;
+        if (score > best.score) best = { score, snapshot: this.snapshot() };
+        if (best.score >= target) break;
+      }
+      this.setRecipe(best.snapshot);
+      return { score: best.score, tries };
+    }
+    /**
+     * 空白を、既存の物と重ならない位置に丸ごとの物を足して埋める。
+     * 既存の配置は動かさない。空白の指標が目標に届くか、置ける場所が無くなるまで続ける。
+     */
+    fillGaps({ target = 92, maxAdd = 40 } = {}) {
+      const recipe2 = this.recipe;
+      if (!recipe2.motifs.length) return 0;
+      const unit = recipe2.repeatUnit;
+      const rng = new SeededRandom(`${recipe2.randomization.seed}:fill`);
+      const pad = 8;
+      const overlaps = (x, y, w, h) => recipe2.placements.some((pl) => {
+        let dx = Math.abs(pl.x - x);
+        let dy = Math.abs(pl.y - y);
+        if (dx > unit.width / 2) dx = unit.width - dx;
+        if (dy > unit.height / 2) dy = unit.height - dy;
+        return dx < (pl.width * pl.scale + w) / 2 + pad && dy < (pl.height * pl.scale + h) / 2 + pad;
+      });
+      let added = 0;
+      let z = recipe2.placements.reduce((m, p) => Math.max(m, p.zIndex ?? 0), 0) + 1;
+      for (let attempt = 0; attempt < maxAdd * 12 && added < maxAdd; attempt++) {
+        if (attempt % 6 === 0) {
+          const report = this.evaluate();
+          if (report.metrics.negativeSpace >= target && report.metrics.patternBalance >= target) break;
+        }
+        const motif = recipe2.motifs[rng.int(0, recipe2.motifs.length - 1)];
+        const scale = motif.scale ?? 1;
+        const w = motif.width * scale;
+        const h = motif.height * scale;
+        let best = null;
+        for (let k = 0; k < 12; k++) {
+          const cx = rng.float(0, unit.width);
+          const cy = rng.float(0, unit.height);
+          let nearest = Infinity;
+          for (const pl of recipe2.placements) {
+            let dx = Math.abs(pl.x - cx);
+            let dy = Math.abs(pl.y - cy);
+            if (dx > unit.width / 2) dx = unit.width - dx;
+            if (dy > unit.height / 2) dy = unit.height - dy;
+            nearest = Math.min(nearest, Math.hypot(dx, dy));
+          }
+          if (!best || nearest > best.nearest) best = { x: cx, y: cy, nearest };
+        }
+        const x = best.x;
+        const y = best.y;
+        let chosen = null;
+        if (!overlaps(x, y, w, h)) chosen = motif;
+        else {
+          const bySize = [...recipe2.motifs].sort((a, b) => a.width * a.height - b.width * b.height);
+          for (const m of bySize) {
+            const sc = m.scale ?? 1;
+            if (!overlaps(x, y, m.width * sc, m.height * sc)) {
+              chosen = m;
+              break;
+            }
+          }
+        }
+        if (!chosen) continue;
+        const cs = chosen.scale ?? 1;
+        recipe2.placements.push(
+          createPlacement({ motifId: chosen.id, x, y, width: chosen.width, height: chosen.height, scale: cs, rotation: rng.float(-8, 8), zIndex: z++ })
+        );
+        added += 1;
+      }
+      if (added) this.markDirty();
+      return added;
+    }
+    /**
+     * 重なっている配置を、位置をほとんど変えずに解く。
+     * 中心どうしを結ぶ向きに少しずつ離す（トーラス上で巻き戻す）。
+     * それでも重なりが残る場合は、小さい方を取り除く（重なった柄は置かない、が原則）。
+     */
+    separateOverlaps({ iterations = 30, padding = 6 } = {}) {
+      const unit = this.recipe.repeatUnit;
+      const list = this.recipe.placements;
+      if (list.length < 2) return { moved: 0, removed: 0 };
+      const box = (p) => ({ w: p.width * p.scale + padding, h: p.height * p.scale + padding });
+      const delta = (a, b) => {
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        if (dx > unit.width / 2) dx -= unit.width;
+        if (dx < -unit.width / 2) dx += unit.width;
+        if (dy > unit.height / 2) dy -= unit.height;
+        if (dy < -unit.height / 2) dy += unit.height;
+        return { dx, dy };
+      };
+      let moved = 0;
+      for (let it = 0; it < iterations; it++) {
+        let any = false;
+        for (let i = 0; i < list.length; i++) {
+          for (let j = i + 1; j < list.length; j++) {
+            const a = list[i];
+            const b = list[j];
+            if (a.locked && b.locked) continue;
+            const { dx, dy } = delta(a, b);
+            const ba = box(a);
+            const bb = box(b);
+            const ox = (ba.w + bb.w) / 2 - Math.abs(dx);
+            const oy = (ba.h + bb.h) / 2 - Math.abs(dy);
+            if (ox <= 0 || oy <= 0) continue;
+            any = true;
+            const push = Math.min(ox, oy) / 2 + 0.5;
+            const sx = ox < oy ? Math.sign(dx || 1) : 0;
+            const sy = ox < oy ? 0 : Math.sign(dy || 1);
+            if (!a.locked) {
+              a.x = wrap(a.x - sx * push, unit.width);
+              a.y = wrap(a.y - sy * push, unit.height);
+            }
+            if (!b.locked) {
+              b.x = wrap(b.x + sx * push, unit.width);
+              b.y = wrap(b.y + sy * push, unit.height);
+            }
+            moved += 1;
+          }
+        }
+        if (!any) break;
+      }
+      let removed = 0;
+      for (let i = list.length - 1; i >= 0; i--) {
+        for (let j = 0; j < i; j++) {
+          const a = list[j];
+          const b = list[i];
+          const { dx, dy } = delta(a, b);
+          const ba = box(a);
+          const bb = box(b);
+          const ox = (ba.w + bb.w) / 2 - Math.abs(dx);
+          const oy = (ba.h + bb.h) / 2 - Math.abs(dy);
+          if (ox > 0 && oy > 0 && ox * oy / (bb.w * bb.h) > 0.3) {
+            list.splice(i, 1);
+            removed += 1;
+            break;
+          }
+        }
+      }
+      this.markDirty();
+      return { moved, removed };
+    }
+    /**
+     * 物を「完全なものだけ」揃えて、重ならないように散らし直す。
+     * 元画像の四辺で切れている物（翼だけ・顔の半分）は素材に使わない。
+     * 配置は元と同じにはならないが、物は必ず丸ごとで、継ぎ目は Wrap Around が保証する。
+     */
+    rescatterObjects(canvas, { seed = null } = {}) {
+      const working = toCanvas(canvas);
+      const found = MotifExtractor.extract(working, { maxMotifs: 60, minAreaRatio: 8e-4 });
+      if (found.length < 3) return { applied: false, reason: `\u7269\u304C ${found.length} \u500B\u3057\u304B\u53D6\u308C\u307E\u305B\u3093` };
+      const margin = 2;
+      const whole = found.filter((f) => !(f.touchesEdge ?? false));
+      const usable = whole.filter((f) => f.areaRatio < 0.12);
+      if (usable.length < 3) return { applied: false, reason: `\u5B8C\u5168\u306A\u7269\u304C ${usable.length} \u500B\u3057\u304B\u3042\u308A\u307E\u305B\u3093` };
+      const coverage = found.reduce((a, f) => a + f.areaRatio, 0);
+      const ground = estimateGroundColor(working);
+      const unit = this.recipe.repeatUnit;
+      unit.width = working.width;
+      unit.height = working.height;
+      this.recipe.canvas.physicalHeightCm = Math.round(this.recipe.canvas.physicalWidthCm * (unit.height / unit.width) * 100) / 100;
+      this.recipe.background = { ...this.recipe.background, type: "color", color: ground.hex, imageId: null, palette: null };
+      this.recipe.seamlessSettings = { ...this.recipe.seamlessSettings, wrapAround: true, edgeMode: "none", blendEdges: false };
+      this.recipe.motifs = [];
+      this.recipe.placements = [];
+      const kindOf = (f) => `${Math.round(f.canvas.width / 40)}x${Math.round(f.canvas.height / 40)}`;
+      const counts = /* @__PURE__ */ new Map();
+      for (const f of found) counts.set(kindOf(f), (counts.get(kindOf(f)) ?? 0) + 1);
+      for (const [i, f] of usable.entries()) {
+        const image = this.imageStore.add(f.canvas, { name: `Motif ${i + 1}` });
+        const sameKind = usable.filter((u) => kindOf(u) === kindOf(f)).length;
+        const weight2 = Math.max(2, Math.round((counts.get(kindOf(f)) ?? 1) / sameKind * 10));
+        this.recipe.motifs.push(
+          createMotif({ name: `Motif ${i + 1}`, sourceImage: image.id, width: f.canvas.width, height: f.canvas.height, scale: 1, weight: weight2 })
+        );
+      }
+      this.recipe.constraints.allOverOnly = true;
+      this.recipe.repeatStrategy = "all-over";
+      Object.assign(this.recipe.generator, {
+        // 元の絵の物の総数に近づける（散らしの密度は面積比ではなく個数で決める）
+        density: Math.min(1, Math.max(0.35, found.length / 40)),
+        rotationVariation: 8,
+        randomRotation: 0,
+        scaleVariation: 0.08,
+        scale: 1
+      });
+      this.recipe.collision = { ...this.recipe.collision ?? {}, enabled: true, padding: 10, mode: "avoid" };
+      this.generate(seed != null ? { seed } : { newSeed: true });
+      const cut = found.length - whole.length;
+      const splitCount = found.filter((f) => f.split).length;
+      return {
+        applied: true,
+        motifs: usable.length,
+        placements: this.recipe.placements.length,
+        note: `${found.length} \u500B\u306B\u5206\u3051\u305F\uFF08\u4E38\u3054\u3068 ${whole.length}\u30FB\u5207\u308C ${cut}${splitCount ? `\u30FB\u304F\u3063\u3064\u304D\u3092\u5207\u308A\u5206\u3051 ${splitCount}` : ""}\uFF09\u2192 \u4E38\u3054\u3068\u306E ${usable.length} \u7A2E\u3092\u91CD\u306A\u3089\u306A\u3044\u3088\u3046\u306B\u6563\u3089\u3057\u76F4\u3057\uFF08${this.recipe.placements.length} \u914D\u7F6E\uFF09`
+      };
+    }
+    /** 総柄でない絵（1点もの・余白のある絵・パネル）から総柄を組み立てる */
+    composeAllOver(canvas, options = {}) {
+      const result = this.composer.composeBest(canvas, options);
+      this.markDirty();
+      return result;
+    }
+    /** 背景層（テクスチャ）とモチーフ層（物）に分けて、別々に繋いでから重ねる */
+    rebuildLayered(canvas, options = {}) {
+      const result = this.layered.rebuild(canvas, options);
+      this.markDirty();
+      return result;
+    }
+    /**
      * 1枚の絵を、構図を変えずに総柄として組み直す。
      * 端の処理（ぼかし・鏡）を使わず、Wrap Around で継ぎ目を保証する。
      */
@@ -6336,6 +7656,8 @@ output {
       this.recipe.seamlessSettings.edgeMode = "none";
       this.recipe.seamlessSettings.blendEdges = false;
       this.recipe.meta.borderArtifact = null;
+      this.recipe.motifs = [];
+      this.recipe.placements = [];
       this.renderer.setPalette(null);
       this.renderer.clearTintCache();
       this.markDirty();
@@ -6361,6 +7683,77 @@ output {
       this.recipe.meta.garmentMode = true;
       this.generate(seed != null ? { seed } : { newSeed: true });
       return { applied: true, placements: this.recipe.placements.length };
+    }
+    /**
+     * リピートの実寸を目標値（既定 30cm）に揃える。高さは単位の縦横比に追従。
+     * 単位の画素数が変わる操作（切り貼り・拡張・組み直し・散らし直し・案の切替）のあとに必ず呼ぶ。
+     * 呼び忘れると、Recipe 既定の小さな実寸のまま書き出されて「小さい」になる（実際に起きた）。
+     */
+    normalizeRepeatSize() {
+      const unit = this.recipe.repeatUnit;
+      const target = this.recipe.meta.targetRepeatCm ?? 30;
+      this.recipe.canvas.physicalWidthCm = Math.round(target * 100) / 100;
+      this.recipe.canvas.physicalHeightCm = Math.round(unit.height * target / unit.width * 100) / 100;
+      return { widthCm: this.recipe.canvas.physicalWidthCm, heightCm: this.recipe.canvas.physicalHeightCm };
+    }
+    /**
+     * 印刷用シート：生地幅 × 長さ（cm）を指定 dpi で敷き詰めた1枚を作る。
+     * プリント業者に渡すのはリピート単位ではなくこの面。
+     * 継ぎ目が出ないよう、書き出し単位（bake）を整数ピクセルで等倍に並べる。
+     */
+    renderPrintSheet({ widthCm, heightCm, dpi = 150, upscale = "lanczos" } = {}) {
+      const pxPerCm = dpi / 2.54;
+      const sheetW = Math.round(widthCm * pxPerCm);
+      const sheetH = Math.round(heightCm * pxPerCm);
+      const unitWidthPx = Math.max(8, Math.round(this.recipe.canvas.physicalWidthCm * pxPerCm));
+      const baked = this.repeat.bake(this.recipe);
+      const unitsAcross = baked.width / this.recipe.repeatUnit.width;
+      const wanted = Math.round(unitWidthPx * unitsAcross);
+      const nativeWidth = Math.round(this.recipe.repeatUnit.width * unitsAcross);
+      const exported = this.bakeExportUnit({ pixelWidth: wanted > nativeWidth ? nativeWidth : wanted, dpi });
+      let tile = exported.canvas;
+      if (wanted > nativeWidth && upscale === "lanczos") {
+        tile = resampleLanczos(tile, wanted, Math.round(tile.height * wanted / tile.width), { sharpen: 0.35 });
+      }
+      const sheet = createCanvas2(sheetW, sheetH);
+      const c = ctx2d(sheet);
+      if (this.recipe.background.type !== "transparent") {
+        c.fillStyle = this.activeColorway?.background ?? this.recipe.background.color;
+        c.fillRect(0, 0, sheetW, sheetH);
+      }
+      const cols = Math.ceil(sheetW / tile.width);
+      const rows = Math.ceil(sheetH / tile.height);
+      for (let r = 0; r < rows; r++) {
+        for (let col = 0; col < cols; col++) {
+          c.drawImage(tile, col * tile.width, r * tile.height);
+        }
+      }
+      return {
+        canvas: sheet,
+        widthPx: sheetW,
+        heightPx: sheetH,
+        dpi,
+        tileWidthPx: tile.width,
+        tileHeightPx: tile.height,
+        repeats: { across: Math.round(sheetW / tile.width * 100) / 100, down: Math.round(sheetH / tile.height * 100) / 100 }
+      };
+    }
+    /**
+     * 元画像の画素数から、品質を保てる実寸の上限を出す（有効解像度）。
+     */
+    effectiveResolution() {
+      const bg = this.recipe.background;
+      const source = bg.type === "image" && bg.imageId ? this.imageStore.getCanvas(bg.imageId) : null;
+      if (!source) return null;
+      const cm = this.recipe.canvas.physicalWidthCm;
+      const dpi = source.width / cm * 2.54;
+      return {
+        sourcePx: source.width,
+        repeatCm: cm,
+        effectiveDpi: Math.round(dpi),
+        maxCmAt150: Math.round(source.width / 150 * 2.54 * 10) / 10,
+        maxCmAt200: Math.round(source.width / 200 * 2.54 * 10) / 10
+      };
     }
     // ---- 色 -------------------------------------------------------------
     /**
@@ -6587,6 +7980,9 @@ output {
       return cloneRecipe(this.recipe);
     }
   };
+  function wrap(v, size) {
+    return (v % size + size) % size;
+  }
 
   // src/core/image/ImageStore.js
   var ImageStore = class {
@@ -6636,9 +8032,9 @@ output {
       this.lastError = null;
       this.label = "\u306A\u3057\uFF08\u30ED\u30FC\u30AB\u30EB\u51E6\u7406\u306E\u307F\uFF09";
     }
-    configure({ request, label = "\u30AB\u30B9\u30BF\u30E0 AI" }) {
+    configure({ request, label: label2 = "\u30AB\u30B9\u30BF\u30E0 AI" }) {
       this.transport = typeof request === "function" ? request : null;
-      this.label = this.transport ? label : "\u306A\u3057\uFF08\u30ED\u30FC\u30AB\u30EB\u51E6\u7406\u306E\u307F\uFF09";
+      this.label = this.transport ? label2 : "\u306A\u3057\uFF08\u30ED\u30FC\u30AB\u30EB\u51E6\u7406\u306E\u307F\uFF09";
       return this;
     }
     isAvailable() {
@@ -6915,19 +8311,19 @@ output {
      * @param {(step:{id:string,label:string,status:string,detail?:string})=>void} options.onStep
      */
     async run({ canvas = null, onStep = () => {
-    }, targetScore = 72, maxRepairs = 4, forceInputType = null, forceGarment = false } = {}) {
+    }, targetScore = 90, maxRepairs = 4, forceInputType = null, forceGarment = false } = {}) {
       const engine2 = this.engine;
       const steps = [];
-      const step = async (id, label, fn) => {
-        onStep({ id, label, status: "running" });
+      const step = async (id, label2, fn) => {
+        onStep({ id, label: label2, status: "running" });
         try {
           const detail = await fn();
-          const entry = { id, label, status: "done", detail: detail ?? "" };
+          const entry = { id, label: label2, status: "done", detail: detail ?? "" };
           steps.push(entry);
           onStep(entry);
           return detail;
         } catch (e) {
-          const entry = { id, label, status: "failed", detail: e.message };
+          const entry = { id, label: label2, status: "failed", detail: e.message };
           steps.push(entry);
           onStep(entry);
           return null;
@@ -6946,7 +8342,7 @@ output {
         const wholeImageInput = analysis && [INPUT_TYPES.COMPLETED_PATTERN, INPUT_TYPES.PHOTO, INPUT_TYPES.TEXTURE].includes(analysis.inputType);
         if (wholeImageInput) {
           await step("background", "\u753B\u50CF\u5168\u4F53\u30921\u679A\u306E\u67C4\u3068\u3057\u3066\u914D\u7F6E", () => {
-            const working = toCanvas(canvas, 2048);
+            const working = toCanvas(canvas);
             const border = detectBorderArtifact(working);
             const borderPx = border.top + border.right + border.bottom + border.left;
             engine2.recipe.meta.borderArtifact = borderPx > 0 ? border : null;
@@ -6999,7 +8395,7 @@ output {
           });
           if (!engine2.recipe.motifs.length) {
             await step("motif-fallback", "\u753B\u50CF\u5168\u4F53\u30921\u30E2\u30C1\u30FC\u30D5\u3068\u3057\u3066\u4F7F\u7528", () => {
-              engine2.addMotifFromCanvas(toCanvas(canvas, 1600), { name: "Motif 1", place: false });
+              engine2.addMotifFromCanvas(toCanvas(canvas), { name: "Motif 1", place: false });
               return "1 \u70B9\u3092\u767B\u9332";
             });
           }
@@ -7060,6 +8456,15 @@ output {
           let seam = engine2.checkSeamless();
           engine2.recipe.meta.seamMethod = "as-is";
           if (seam.ok) return `\u305D\u306E\u307E\u307E\u7E4B\u304C\u308B\uFF08${seam.percent}%\uFF09`;
+          const notAllOver = [INPUT_TYPES.SINGLE_MOTIF, INPUT_TYPES.MULTI_MOTIF].includes(analysis.inputType);
+          if (notAllOver && canvas) {
+            const composed = engine2.composeAllOver(canvas, { seed: engine2.recipe.randomization.seed });
+            seam = engine2.checkSeamless();
+            if (composed.applied && seam.ok) {
+              engine2.recipe.meta.seamMethod = "compose";
+              return `\u7DCF\u67C4\u306B\u7D44\u307F\u7ACB\u3066\u305F\uFF08${composed.note}\uFF09\uFF0F\u30B9\u30B3\u30A2 ${composed.score}`;
+            }
+          }
           if (!engine2.recipe.meta.original?.imageId && canvas) {
             const entry = engine2.imageStore.add(canvas, { name: "\u5165\u7A3F\u753B\u50CF\uFF08\u539F\u672C\uFF09" });
             engine2.recipe.meta.original = { imageId: entry.id, width: canvas.width, height: canvas.height };
@@ -7075,15 +8480,28 @@ output {
           return `${seam.percent}%\uFF08\u57FA\u6E96\u672A\u9054 \u2192 \u624B\u52D5\u3067\u8ABF\u6574\u3057\u3066\u304F\u3060\u3055\u3044\uFF09`;
         });
       }
-      if (engine2.recipe.background.type === "image" && engine2.recipe.meta.seamMethod === "cut" && // 元の絵がそのまま繋がる場合は触らない
-      engine2.checkSeamless().ok) {
+      engine2.normalizeRepeatSize();
+      if (engine2.recipe.background.type === "image" && engine2.checkSeamless().ok) {
         const unit = engine2.recipe.repeatUnit;
-        if (Math.min(unit.width, unit.height) < 1e3) {
-          await step("enlarge", "\u7E70\u308A\u8FD4\u3057\u3092\u76EE\u7ACB\u305F\u306A\u304F\u3059\u308B", () => {
+        const targetCm = engine2.recipe.meta.targetRepeatCm ?? 30;
+        const effectiveDpi = unit.width / targetCm * 2.54;
+        if (effectiveDpi < 150 && engine2.recipe.meta.seamMethod === "cut" && !engine2.recipe.placements.length) {
+          await step("enlarge", "\u753B\u7D20\u3092\u7A3C\u3050\uFF082\xD72\u306B\u7D44\u3080\uFF09", () => {
             const result = engine2.enlargeRepeat({ factor: 2 });
-            return result.applied ? `2\xD72 \u306B\u7D44\u307F\u76F4\u3057\u3066 ${result.size.width}\xD7${result.size.height}px\uFF08${result.widthCm}\xD7${result.heightCm}cm\uFF09` : `\u898B\u9001\u308A\uFF08${result.reason}\uFF09`;
+            if (!result.applied) return `\u898B\u9001\u308A\uFF08${result.reason}\uFF09`;
+            const u = engine2.recipe.repeatUnit;
+            engine2.normalizeRepeatSize();
+            const dpiNow = Math.round(u.width / targetCm * 2.54);
+            return `2\xD72 \u306B\u7D44\u3093\u3067 ${u.width}\xD7${u.height}px \u2192 ${targetCm}cm \u3067\u5B9F\u52B9 ${dpiNow}dpi`;
           });
         }
+      }
+      if (engine2.recipe.placements.length) {
+        await step("optimize", "\u914D\u7F6E\u3092\u8A70\u3081\u308B\uFF08100%\u3092\u76EE\u6307\u3059\uFF09", () => {
+          const before = engine2.evaluate().score;
+          const r = engine2.optimizeLayout({ target: 100, tries: 14 });
+          return `${before} \u2192 ${r.score}${r.fixed ? "\uFF08\u4F4D\u7F6E\u306F\u4FDD\u3061\u3001\u91CD\u306A\u308A\u3060\u3051\u89E3\u6D88\uFF09" : `\uFF08${r.tries} \u56DE\u4F5C\u308A\u76F4\u3057\uFF09`}`;
+        });
       }
       let report = await step("quality", "\u54C1\u8CEA\u3092\u691C\u67FB", () => {
         const r = engine2.evaluate();
@@ -7410,24 +8828,53 @@ output {
       this.engine = engine2;
     }
     /** 繰り返し単位1枚（印刷入稿用） */
-    exportRepeatUnit({ dpi = null, widthCm = null } = {}) {
+    exportRepeatUnit({ dpi = null, widthCm = null, upscale = "lanczos" } = {}) {
       const recipe2 = this.engine.recipe;
       const useDpi = dpi ?? recipe2.canvas.dpi;
       const useWidthCm = widthCm ?? recipe2.canvas.physicalWidthCm;
       const strategy = this.engine.strategy;
       const baked = this.engine.repeat.bake(recipe2);
       const unitsAcross = baked.width / recipe2.repeatUnit.width;
-      const pixelWidth = Math.round(cmToPx(useWidthCm, useDpi) * unitsAcross);
-      const result = this.engine.bakeExportUnit({ pixelWidth, dpi: useDpi });
+      const wanted = Math.round(cmToPx(useWidthCm, useDpi) * unitsAcross);
+      const nativeWidth = Math.round(recipe2.repeatUnit.width * unitsAcross);
+      const upscaling = wanted > nativeWidth;
+      const sourceDpi = Math.round(nativeWidth / (useWidthCm * unitsAcross) * 2.54);
+      const base = this.engine.bakeExportUnit({ pixelWidth: upscaling ? nativeWidth : wanted, dpi: useDpi });
+      let canvas = base.canvas;
+      if (upscaling && upscale !== "none") {
+        const outH = Math.round(canvas.height * wanted / canvas.width);
+        canvas = resampleLanczos(canvas, wanted, outH, { sharpen: 0.35 });
+      }
+      const result = { ...base, canvas };
       return {
         ...result,
+        dpi: useDpi,
+        requestedDpi: useDpi,
+        sourceDpi,
+        upscaled: upscaling && upscale !== "none",
         strategy: strategy.name,
         seamless: result.seamless,
         note: result.seamless ? "\u3053\u306E\u307E\u307E\u7E26\u6A2A\u306B\u4E26\u3079\u3066\u7E70\u308A\u8FD4\u305B\u307E\u3059" : "\u3053\u306E\u65B9\u5F0F\u306F\u5358\u4F4D\u3068\u3057\u3066\u7E70\u308A\u8FD4\u305B\u307E\u305B\u3093\uFF08\u7F6E\u304D\u67C4\u30FB\u30D1\u30CD\u30EB\u67C4\uFF09",
+        resolutionNote: upscaling ? `\u5143\u753B\u50CF\u306F ${useWidthCm}cm \u3067\u5B9F\u52B9 ${sourceDpi}dpi\u3002Lanczos-3 \u3067 ${nativeWidth}px \u2192 ${wanted}px\uFF08${useDpi}dpi\uFF09\u306B\u62E1\u5927\u3057\u8F2A\u90ED\u3092\u5F15\u304D\u7DE0\u3081\u307E\u3057\u305F\u3002\u3088\u308A\u9BAE\u660E\u306B\u3059\u308B\u306B\u306F\u6A2A ${wanted}px \u4EE5\u4E0A\u306E\u5143\u753B\u50CF\u304C\u5FC5\u8981\u3067\u3059` : null,
         filename: `${slug(recipe2.name)}_${strategy.id}_${useDpi}dpi.png`
       };
     }
     /** 生地の見た目確認用プレビュー */
+    /** 印刷用シート（生地幅×長さ）を TIFF/JPEG で書き出す */
+    async exportPrintSheet({ widthCm, heightCm, dpi = 150, format = "tiff", name = "print-sheet" } = {}) {
+      const sheet = this.engine.renderPrintSheet({ widthCm, heightCm, dpi, upscale: "lanczos" });
+      const canvas = sheet.canvas;
+      if (format === "jpeg") {
+        const blob = await canvasToBlob(canvas, "image/jpeg", 0.92);
+        const withDpi = withJpegDpi(await blob.arrayBuffer(), dpi);
+        await triggerDownload(new Blob([withDpi], { type: "image/jpeg" }), `${name}.jpg`);
+      } else {
+        const data = ctx2d(canvas).getImageData(0, 0, canvas.width, canvas.height);
+        const bytes = encodeTiff(data, { dpi, compression: "lzw" });
+        await triggerDownload(new Blob([bytes], { type: "image/tiff" }), `${name}.tif`);
+      }
+      return sheet;
+    }
     exportPreview({ grid = 3, maxPixels = 2400 } = {}) {
       const recipe2 = this.engine.recipe;
       const canvas = this.engine.renderPreview({
@@ -7849,7 +9296,7 @@ output {
       if (!motif) return null;
       this.engine.pushHistory(`${motif.name} \u3092\u914D\u7F6E`);
       const unit = this.engine.recipe.repeatUnit;
-      const placement = createPlacement({
+      const placement = createPlacement2({
         motifId,
         x: unit.width / 2,
         y: unit.height / 2,
@@ -7875,7 +9322,7 @@ output {
       const unit = this.engine.recipe.repeatUnit;
       const step = Math.min(unit.width, unit.height) * 0.06;
       const copies = targets.map(
-        (p, i) => createPlacement({
+        (p, i) => createPlacement2({
           ...p,
           id: void 0,
           x: wrapValue(p.x + step, unit.width),
@@ -7901,10 +9348,10 @@ output {
       this.onChange({ reason: "delete" });
     }
     /** 選択中すべてに変形を適用 */
-    applyToSelected(fn, reason = "transform", label = null) {
+    applyToSelected(fn, reason = "transform", label2 = null) {
       const targets = this.selectedPlacements;
       if (!targets.length) return;
-      if (label) this.engine.pushHistory(label);
+      if (label2) this.engine.pushHistory(label2);
       targets.forEach((p) => fn(p));
       this.engine.markDirty();
       this.requestRender();
@@ -8474,8 +9921,8 @@ output {
         this.engine.pushHistory("\u30E2\u30C1\u30FC\u30D5\u3092\u79FB\u52D5", { coalesce: true });
         this.selectedPlacements.forEach((p) => MotifTransform.move(p, dx, dy, unit));
       };
-      const each = (fn, label) => {
-        this.engine.pushHistory(label, { coalesce: true });
+      const each = (fn, label2) => {
+        this.engine.pushHistory(label2, { coalesce: true });
         this.selectedPlacements.forEach(fn);
       };
       const map = {
@@ -8981,17 +10428,17 @@ output {
           task: "detect-motifs",
           crops: local.map((m) => m.canvas)
         });
-        for (const label of Array.isArray(labels) ? labels : []) {
-          if (!Number.isInteger(label?.index)) continue;
-          const target = local[label.index];
+        for (const label2 of Array.isArray(labels) ? labels : []) {
+          if (!Number.isInteger(label2?.index)) continue;
+          const target = local[label2.index];
           if (!target) continue;
-          const category = MOTIF_CATEGORIES.includes(label.category) ? label.category : "unknown";
+          const category = MOTIF_CATEGORIES.includes(label2.category) ? label2.category : "unknown";
           target.category = category;
           target.categoryLabel = CATEGORY_LABELS[category];
-          if (typeof label.name === "string" && label.name.trim()) {
-            target.name = label.name.trim().slice(0, 24);
+          if (typeof label2.name === "string" && label2.name.trim()) {
+            target.name = label2.name.trim().slice(0, 24);
           }
-          const confidence = Number(label.confidence);
+          const confidence = Number(label2.confidence);
           target.confidence = Number.isFinite(confidence) ? Math.min(1, Math.max(0, confidence)) : 0.6;
           target.source = "ai";
         }
@@ -9016,7 +10463,7 @@ output {
   var recipe = createPatternRecipe({
     name: "Pattern 01",
     repeatUnit: { width: 600, height: 600, previewGrid: 3, showBoundary: true },
-    canvas: { physicalWidthCm: 20, physicalHeightCm: 20, dpi: 300 }
+    canvas: { physicalWidthCm: 30, physicalHeightCm: 30, dpi: 300 }
   });
   applyPhysicalSize(recipe, {});
   var engine = new PatternEngine({ imageStore, recipe });
@@ -9034,8 +10481,8 @@ output {
       syncHistoryButtons();
     },
     onZoom: (percent) => {
-      const label = $("zoomValue");
-      if (label) label.textContent = `${percent}%`;
+      const label2 = $("zoomValue");
+      if (label2) label2.textContent = `${percent}%`;
     },
     onSelect: (placement, many = []) => {
       $("selectionTools").hidden = many.length === 0;
@@ -9131,6 +10578,7 @@ output {
   }
   function refreshAll() {
     scheduleAutosave();
+    if (engine.recipe.repeatUnit?.width) engine.normalizeRepeatSize();
     $("selectionTools").hidden = editor.selectedPlacements.length === 0;
     engine.syncPalette();
     editor.requestRender();
@@ -9151,24 +10599,24 @@ output {
     redo.title = canRedo ? `\u3084\u308A\u76F4\u3059: ${redoLabel}` : "\u3084\u308A\u76F4\u305B\u308B\u64CD\u4F5C\u306F\u3042\u308A\u307E\u305B\u3093";
   }
   function doUndo() {
-    const label = engine.undo();
-    if (!label) return;
+    const label2 = engine.undo();
+    if (!label2) return;
     editor.clearSelection();
     buildStrategySelect();
     buildPresets();
     refreshAll();
     scheduleEvaluate();
-    toast(`\u5143\u306B\u623B\u3057\u307E\u3057\u305F: ${label}`);
+    toast(`\u5143\u306B\u623B\u3057\u307E\u3057\u305F: ${label2}`);
   }
   function doRedo() {
-    const label = engine.redo();
-    if (!label) return;
+    const label2 = engine.redo();
+    if (!label2) return;
     editor.clearSelection();
     buildStrategySelect();
     buildPresets();
     refreshAll();
     scheduleEvaluate();
-    toast(`\u3084\u308A\u76F4\u3057\u307E\u3057\u305F: ${label}`);
+    toast(`\u3084\u308A\u76F4\u3057\u307E\u3057\u305F: ${label2}`);
   }
   function buildStrategySelect() {
     const select = $("strategySelect");
@@ -9220,8 +10668,8 @@ output {
     const host = $("genSliders");
     host.innerHTML = "";
     for (const def of SLIDERS) {
-      const label = document.createElement("label");
-      label.className = "field";
+      const label2 = document.createElement("label");
+      label2.className = "field";
       const span = document.createElement("span");
       const b = document.createElement("b");
       span.append(`${def.label} `, b);
@@ -9249,8 +10697,8 @@ output {
           scheduleEvaluate();
         }
       });
-      label.append(span, input);
-      host.appendChild(label);
+      label2.append(span, input);
+      host.appendChild(label2);
       input._sync = sync;
       sync();
     }
@@ -9344,16 +10792,16 @@ output {
       const detail = document.createElement("div");
       detail.className = "motif__detail";
       detail.hidden = !openMotifDetails.has(motif.id);
-      const rangeRow = (label, key, min, max, step, format) => {
-        const wrap = document.createElement("label");
-        wrap.className = "field";
+      const rangeRow = (label2, key, min, max, step, format) => {
+        const wrap2 = document.createElement("label");
+        wrap2.className = "field";
         const span = document.createElement("span");
         const b = document.createElement("b");
         const sync = () => {
           const [lo2, hi2] = motif[key] ?? [min, max];
           b.textContent = format(lo2, hi2);
         };
-        span.append(`${label} `, b);
+        span.append(`${label2} `, b);
         const pair = document.createElement("div");
         pair.className = "range-pair";
         const lo = document.createElement("input");
@@ -9377,16 +10825,16 @@ output {
             sync();
           });
           input.addEventListener("change", () => {
-            engine.pushHistory(`${motif.name} \u306E${label}\u3092\u5909\u66F4`);
+            engine.pushHistory(`${motif.name} \u306E${label2}\u3092\u5909\u66F4`);
             engine.generate({ seed: engine.recipe.randomization.seed });
             refreshAll();
             scheduleEvaluate();
           });
         });
         pair.append(lo, hi);
-        wrap.append(span, pair);
+        wrap2.append(span, pair);
         sync();
-        return wrap;
+        return wrap2;
       };
       detail.append(
         rangeRow("\u30B5\u30A4\u30BA\u7BC4\u56F2", "scaleRange", 0.2, 3, 0.05, (a, b) => `\xD7${a.toFixed(2)} \u301C \xD7${b.toFixed(2)}`),
@@ -9487,12 +10935,12 @@ output {
     }
     $("scoreValue").textContent = report.score;
     host.innerHTML = "";
-    for (const [key, label] of Object.entries(METRIC_LABELS)) {
+    for (const [key, label2] of Object.entries(METRIC_LABELS)) {
       const value = report.metrics[key] ?? 0;
       const row = document.createElement("div");
       row.className = "metric";
       const name = document.createElement("span");
-      name.textContent = label;
+      name.textContent = label2;
       const bar = document.createElement("div");
       bar.className = "metric__bar";
       const fill = document.createElement("div");
@@ -9641,7 +11089,7 @@ output {
     for (const file of files) {
       try {
         const img = await loadImageFromFile(file);
-        canvases.push(toCanvas(img, 2048));
+        canvases.push(toCanvas(img));
       } catch (e) {
         toast(e.message);
       }
@@ -9713,9 +11161,9 @@ output {
       const canvas = temp.renderPreview({ grid: 2, scale: 220 / (v.recipe.repeatUnit.width * 2) });
       const btn = document.createElement("button");
       btn.className = "variation";
-      const label = document.createElement("span");
-      label.textContent = `${v.label} \xB7 ${v.name}`;
-      btn.append(canvas, label);
+      const label2 = document.createElement("span");
+      label2.textContent = `${v.label} \xB7 ${v.name}`;
+      btn.append(canvas, label2);
       btn.addEventListener("click", () => {
         engine.pushHistory(`Variation ${v.label} \u3092\u63A1\u7528`);
         engine.setRecipe(v.recipe);
@@ -9800,8 +11248,8 @@ output {
       const tint = cw.motifTints[motif.id] ?? null;
       const row = document.createElement("div");
       row.className = "cw-row";
-      const label = document.createElement("span");
-      label.textContent = motif.name;
+      const label2 = document.createElement("span");
+      label2.textContent = motif.name;
       const color = document.createElement("input");
       color.className = "color";
       color.type = "color";
@@ -9826,8 +11274,8 @@ output {
       amount.step = 0.05;
       amount.value = tint?.amount ?? 1;
       amount.hidden = mode.value === "none";
-      const apply = (label2) => {
-        if (label2) engine.pushHistory(label2);
+      const apply = (label22) => {
+        if (label22) engine.pushHistory(label22);
         if (mode.value === "none") {
           delete cw.motifTints[motif.id];
         } else {
@@ -9848,7 +11296,7 @@ output {
       });
       mode.addEventListener("change", () => apply(`${motif.name} \u306E\u8272\u5909\u63DB`));
       amount.addEventListener("input", () => apply(null));
-      row.append(label, color, mode, amount);
+      row.append(label2, color, mode, amount);
       host.appendChild(row);
     }
   }
@@ -9915,21 +11363,36 @@ output {
         editor.requestRender();
         toast(`${entry.hex} \u306B\u623B\u3057\u307E\u3057\u305F`);
       });
-      row.append(chip, bar, value, undo);
+      const motifColors = engine.recipe.meta.motifColors ?? [];
+      const isMotifColor = motifColors.includes(entry.hex);
+      const motifToggle = document.createElement("button");
+      motifToggle.className = `swatch__undo${isMotifColor ? " is-on" : ""}`;
+      motifToggle.textContent = "\u7269";
+      motifToggle.title = isMotifColor ? "\u3053\u306E\u8272\u306F\u300C\u7269\u300D\u3068\u3057\u3066\u6271\u3044\u307E\u3059\uFF08\u62BC\u3059\u3068\u89E3\u9664\uFF09" : "\u3053\u306E\u8272\u3092\u300C\u7269\u300D\u3068\u3057\u3066\u6271\u3046\uFF08\u80CC\u666F\u3068\u5206\u3051\u3066\u7E4B\u3050\uFF09";
+      motifToggle.addEventListener("click", () => {
+        const list = new Set(engine.recipe.meta.motifColors ?? []);
+        if (list.has(entry.hex)) list.delete(entry.hex);
+        else list.add(entry.hex);
+        engine.recipe.meta.motifColors = [...list];
+        engine.planner.candidates = [];
+        renderPalette();
+        toast(list.size ? `\u300C\u7269\u300D\u306E\u8272\uFF1A${[...list].join(" ")}\u3002CHANGE PATTERN \u304B AUTO \u3067\u53CD\u6620\u3055\u308C\u307E\u3059` : "\u300C\u7269\u300D\u306E\u6307\u5B9A\u3092\u89E3\u9664\u3057\u307E\u3057\u305F");
+      });
+      row.append(chip, bar, value, undo, motifToggle);
       host.appendChild(row);
     });
   }
   async function setupAi() {
     const status = await claudeVisionProvider.detect();
     const toggle = $("aiToggle");
-    const label = $("aiStatus");
+    const label2 = $("aiStatus");
     if (!status.transport || !status.images) {
       toggle.checked = false;
       toggle.disabled = true;
-      label.textContent = status.images ? `\u7D4C\u8DEF: ${status.detail}` : `\u3053\u306E\u74B0\u5883\u3067\u306F\u753B\u50CF\u3092 AI \u306B\u9001\u308C\u307E\u305B\u3093\uFF08${status.detail}\uFF09\u3002\u30ED\u30FC\u30AB\u30EB\u51E6\u7406\u306E\u307F\u3067\u52D5\u4F5C\u3057\u307E\u3059\u3002`;
+      label2.textContent = status.images ? `\u7D4C\u8DEF: ${status.detail}` : `\u3053\u306E\u74B0\u5883\u3067\u306F\u753B\u50CF\u3092 AI \u306B\u9001\u308C\u307E\u305B\u3093\uFF08${status.detail}\uFF09\u3002\u30ED\u30FC\u30AB\u30EB\u51E6\u7406\u306E\u307F\u3067\u52D5\u4F5C\u3057\u307E\u3059\u3002`;
       return;
     }
-    label.textContent = `\u7D4C\u8DEF: ${status.detail}`;
+    label2.textContent = `\u7D4C\u8DEF: ${status.detail}`;
     toggle.disabled = false;
   }
   function setAiEnabled(enabled) {
@@ -9972,6 +11435,27 @@ output {
     const pyTotal = Math.round(cmToPx(r.canvas.physicalHeightCm, r.canvas.dpi) * unitsDown);
     $("exportPx").textContent = `${px}\xD7${pyTotal}px`;
     $("exportNote").textContent = baked.seamless ? `\u66F8\u304D\u51FA\u3057\u5358\u4F4D\u306F ${unitsAcross}\xD7${unitsDown} \u30BF\u30A4\u30EB\u5206\u3002\u4E26\u3079\u308B\u3060\u3051\u3067\u7E70\u308A\u8FD4\u305B\u307E\u3059\u3002` : "\u3053\u306E\u65B9\u5F0F\u306F\u7E70\u308A\u8FD4\u3057\u5358\u4F4D\u306B\u306A\u308A\u307E\u305B\u3093\uFF08\u7F6E\u304D\u67C4\u30FB\u30D1\u30CD\u30EB\u30FB\u653E\u5C04\uFF09\u3002\u30C7\u30B6\u30A4\u30F3\u9762\u3068\u3057\u3066\u305D\u306E\u307E\u307E\u66F8\u304D\u51FA\u3057\u307E\u3059\u3002";
+    const eff = engine.effectiveResolution();
+    const resNote = $("resolutionNote");
+    if (eff) {
+      const bad = eff.effectiveDpi < 120;
+      resNote.textContent = `\u5143\u753B\u50CF ${eff.sourcePx}px \u3092\u30EA\u30D4\u30FC\u30C8 ${eff.repeatCm}cm \u306B\u3059\u308B\u3068\u5B9F\u52B9 ${eff.effectiveDpi}dpi\u3002` + (bad ? `\u8352\u304F\u306A\u308A\u307E\u3059\u3002150dpi \u3092\u4FDD\u3064\u306A\u3089\u30EA\u30D4\u30FC\u30C8\u5E45\u306F ${eff.maxCmAt150}cm \u307E\u3067\u3002` : `150dpi \u306A\u3089 ${eff.maxCmAt150}cm \u307E\u3067\u5E83\u3052\u3089\u308C\u307E\u3059\u3002`);
+      resNote.classList.toggle("is-warn", bad);
+    } else {
+      resNote.textContent = "";
+    }
+    updateSheetNote();
+  }
+  function updateSheetNote() {
+    const w = parseFloat($("sheetWidthCm").value) || 0;
+    const h = parseFloat($("sheetHeightCm").value) || 0;
+    const dpi = parseInt($("sheetDpi").value, 10) || 150;
+    const px = Math.round(w * dpi / 2.54);
+    const py = Math.round(h * dpi / 2.54);
+    const mp = px * py / 1e6;
+    const repeat = engine.recipe.canvas.physicalWidthCm;
+    const across = repeat ? (w / repeat).toFixed(1) : "-";
+    $("sheetNote").textContent = `${px}\xD7${py}px\uFF08${mp.toFixed(0)}MP\uFF09\u3002\u30EA\u30D4\u30FC\u30C8 ${repeat}cm \u304C\u6A2A\u306B\u7D04 ${across} \u56DE\u3002` + (mp > 60 ? " \u5927\u304D\u3059\u304E\u3066\u7AEF\u672B\u304C\u843D\u3061\u308B\u53EF\u80FD\u6027\u304C\u3042\u308A\u307E\u3059\u3002dpi \u304B\u9577\u3055\u3092\u4E0B\u3052\u3066\u304F\u3060\u3055\u3044\u3002" : mp > 30 ? " \u66F8\u304D\u51FA\u3057\u306B\u6642\u9593\u304C\u304B\u304B\u308A\u307E\u3059\u3002" : "");
   }
   async function handleExport(kind) {
     const format = kind === "unit-jpeg" ? "jpeg" : kind === "unit-tiff" ? "tiff" : "png";
@@ -9988,7 +11472,10 @@ output {
           alpha: engine.recipe.background.type === "transparent"
         });
         const verdict = check.applicable === false ? result.note : check.ok ? "\u30B7\u30FC\u30E0\u30EC\u30B9 100% OK" : `\u30B7\u30FC\u30E0\u30EC\u30B9 ${check.percent}%\uFF1A${check.reasons[0] ?? "\u8981\u78BA\u8A8D"}`;
-        toast(`${formatLabel} / ${result.dpi}dpi \u3067\u66F8\u304D\u51FA\u3057\u307E\u3057\u305F\uFF08${verdict}\uFF09`);
+        toast(
+          result.resolutionNote ? `${formatLabel} / ${result.resolutionNote}\uFF08${verdict}\uFF09` : `${formatLabel} / ${result.dpi}dpi \u3067\u66F8\u304D\u51FA\u3057\u307E\u3057\u305F\uFF08${verdict}\uFF09`,
+          result.resolutionNote ? 9e3 : 4e3
+        );
       } else if (kind === "preview") {
         const result = exporter.exportPreview({ grid: engine.recipe.repeatUnit.previewGrid ?? 3 });
         await exporter.download(result.canvas, result.filename, { format });
@@ -10073,6 +11560,29 @@ output {
         renderQuality(engine.evaluate());
         renderSeamless(engine.checkSeamless());
         toast(`\u30EA\u30D4\u30FC\u30C8\u3092 ${result.size.width}\xD7${result.size.height}px\uFF08${result.widthCm}\xD7${result.heightCm}cm\uFF09\u306B\u5E83\u3052\u307E\u3057\u305F`, 5e3);
+      }, 30);
+    });
+    $("composeBtn").addEventListener("click", () => {
+      const source = lastSourceCanvas ?? imageStore.getCanvas(engine.recipe.meta.original?.imageId ?? engine.recipe.background.imageId);
+      if (!source) {
+        toast("\u5148\u306B\u753B\u50CF\u3092\u8AAD\u307F\u8FBC\u3093\u3067\u304F\u3060\u3055\u3044");
+        return;
+      }
+      const btn = $("composeBtn");
+      btn.disabled = true;
+      engine.pushHistory("\u7DCF\u67C4\u306B\u7D44\u307F\u7ACB\u3066\u308B");
+      setTimeout(() => {
+        const result = engine.composeAllOver(source, { seed: engine.recipe.randomization.seed });
+        btn.disabled = false;
+        if (!result.applied) {
+          toast(result.reason, 5e3);
+          return;
+        }
+        buildStrategySelect();
+        refreshAll();
+        renderQuality(engine.evaluate());
+        renderSeamless(engine.checkSeamless());
+        toast(`${result.note}\uFF0F\u30B7\u30FC\u30E0\u30EC\u30B9 ${result.seamless}%\u30FB\u30B9\u30B3\u30A2 ${result.score}`, 6e3);
       }, 30);
     });
     $("rebuildBtn").addEventListener("click", () => {
@@ -10346,11 +11856,16 @@ output {
       engine.recipe.randomization.locked = e.target.checked;
     });
     const applySize = () => {
+      const u = engine.recipe.repeatUnit;
+      const widthCm = parseFloat($("widthCm").value) || engine.recipe.canvas.physicalWidthCm;
+      const heightCm = Math.round(u.height * widthCm / u.width * 100) / 100;
       applyPhysicalSize(engine.recipe, {
-        widthCm: parseFloat($("widthCm").value) || engine.recipe.canvas.physicalWidthCm,
-        heightCm: parseFloat($("heightCm").value) || engine.recipe.canvas.physicalHeightCm,
+        widthCm,
+        heightCm,
         dpi: parseInt($("dpiSelect").value, 10)
       });
+      engine.recipe.meta.targetRepeatCm = widthCm;
+      $("heightCm").value = heightCm;
       updateExportNote();
     };
     $("widthCm").addEventListener("change", applySize);
@@ -10437,6 +11952,33 @@ output {
       editor.requestRender();
       toast("\u5143\u306E\u8272\u306B\u623B\u3057\u307E\u3057\u305F");
     });
+    for (const id of ["sheetWidthCm", "sheetHeightCm", "sheetDpi"]) {
+      $(id).addEventListener("change", updateSheetNote);
+      $(id).addEventListener("input", updateSheetNote);
+    }
+    const exportSheet = async (format) => {
+      const widthCm = parseFloat($("sheetWidthCm").value) || 130;
+      const heightCm = parseFloat($("sheetHeightCm").value) || 100;
+      const dpi = parseInt($("sheetDpi").value, 10) || 150;
+      const mp = widthCm * dpi / 2.54 * (heightCm * dpi / 2.54) / 1e6;
+      if (mp > 60 && !confirm(`${mp.toFixed(0)}MP \u306E\u5927\u304D\u306A\u753B\u50CF\u306B\u306A\u308A\u307E\u3059\u3002\u7AEF\u672B\u304C\u843D\u3061\u308B\u3053\u3068\u304C\u3042\u308A\u307E\u3059\u3002\u7D9A\u3051\u307E\u3059\u304B\uFF1F`)) return;
+      toast("\u5370\u5237\u7528\u30B7\u30FC\u30C8\u3092\u4F5C\u6210\u4E2D\u2026", 6e4);
+      try {
+        await new Promise((r) => setTimeout(r, 30));
+        const sheet = await exporter.exportPrintSheet({
+          widthCm,
+          heightCm,
+          dpi,
+          format,
+          name: `${(engine.recipe.name || "pattern").replace(/[^\w\-一-龯ぁ-んァ-ヶ]+/g, "-")}-${widthCm}x${heightCm}cm-${dpi}dpi`
+        });
+        toast(`\u5370\u5237\u7528\u30B7\u30FC\u30C8\u3092\u4FDD\u5B58\u3057\u307E\u3057\u305F\uFF1A${sheet.widthPx}\xD7${sheet.heightPx}px\uFF0F${widthCm}\xD7${heightCm}cm\uFF0F${dpi}dpi\uFF08\u30EA\u30D4\u30FC\u30C8\u6A2A ${sheet.repeats.across} \u56DE\uFF09`, 6e3);
+      } catch (e) {
+        toast(`\u30B7\u30FC\u30C8\u306E\u66F8\u304D\u51FA\u3057\u306B\u5931\u6557: ${e.message}`, 6e3);
+      }
+    };
+    $("sheetTiffBtn").addEventListener("click", () => exportSheet("tiff"));
+    $("sheetJpegBtn").addEventListener("click", () => exportSheet("jpeg"));
     $("evaluateBtn").addEventListener("click", () => {
       renderQuality(engine.evaluate());
       renderSeamless(engine.checkSeamless());
