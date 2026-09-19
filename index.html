@@ -39,6 +39,23 @@
   display: none !important;
 }
 
+/**
+ * ファイル入力だけは display:none にしない。
+ * iOS Safari では display:none の input[type=file] がラベルから開けないことがあり、
+ * 「携帯で画像を読み込めない」原因になった。見えないが存在する状態にする。
+ */
+input[type='file'][hidden] {
+  display: block !important;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  pointer-events: none;
+}
+
 html,
 body {
   height: 100%;
@@ -1412,6 +1429,53 @@ output {
   font-weight: 700;
 }
 
+/* ---------- パーツ選択 ---------- */
+.stage__parts {
+  position: absolute;
+  left: calc(12px + env(safe-area-inset-left));
+  right: calc(12px + env(safe-area-inset-right));
+  bottom: calc(58px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 9px;
+  background: rgba(18, 24, 31, 0.94);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  z-index: 6;
+}
+
+.stage__parts__info {
+  font-size: 11px;
+  color: var(--muted);
+  flex: 1;
+  min-width: 140px;
+}
+
+.stage__parts__tol {
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stage__parts__tol input {
+  width: 90px;
+}
+
+.zoom__btn.is-active {
+  background: var(--woad);
+  color: #fff;
+}
+
+/* パーツ選択中は、どのモードか分かるように枠を出す */
+.stage.is-picking canvas {
+  outline: 2px solid var(--sulfur);
+  outline-offset: -2px;
+}
+
 </style>
   </head>
   <body>
@@ -1425,14 +1489,14 @@ output {
         </div>
         <div class="topbar__actions">
           <label class="btn btn--ghost" for="fileInput">画像を読み込む
-            <input id="fileInput" type="file" accept="image/*" multiple hidden />
+            <input id="fileInput" type="file" accept="image/*,.heic,.heif" multiple hidden />
           </label>
           <button class="btn btn--primary" id="autoBtn" title="設定を変えてもう一度自動生成する">AUTO PATTERN</button>
           <button class="btn btn--change" id="changeBtn" title="別の案を試す（シームレスの4条件を通った案だけを順に表示）">
             CHANGE PATTERN
           </button>
           <label class="btn btn--ghost btn--garment" for="garmentInput" title="服の写真を選んで、散らし・上向き・重なりなしの総柄にする">洋服モード
-            <input id="garmentInput" type="file" accept="image/*" hidden />
+            <input id="garmentInput" type="file" accept="image/*,.heic,.heif" hidden />
           </label>
           <button class="btn btn--ghost" id="regenBtn" title="同じ設定で配置し直す">再配置</button>
           <label class="btn btn--ghost" for="projectInput">開く
@@ -1549,12 +1613,22 @@ output {
             <button class="zoom__btn is-active" data-view="3">3列</button>
             <button class="zoom__btn" data-view="5">5列</button>
           </div>
+          <div class="stage__parts" id="partsBar" hidden>
+            <span class="stage__parts__info" id="partsInfo">柄をタップするとパーツを拾います</span>
+            <button class="btn btn--tiny" id="partNarrowBtn" disabled>狭める</button>
+            <button class="btn btn--tiny" id="partWidenBtn" disabled>広げる</button>
+            <button class="btn btn--tiny" id="partDeleteBtn" disabled>削除</button>
+            <button class="btn btn--tiny" id="partMotifBtn" disabled>モチーフにする</button>
+            <button class="btn btn--tiny" id="partSvgBtn" disabled>パスを書き出す</button>
+            <button class="btn btn--tiny" id="partClearBtn" disabled>選択解除</button>
+          </div>
           <div class="stage__zoom" id="zoomBar">
             <button class="zoom__btn" data-zoom="out" aria-label="縮小">−</button>
             <button class="zoom__btn zoom__value" data-zoom="fit" id="zoomValue" title="クリックで全体表示">100%</button>
             <button class="zoom__btn" data-zoom="in" aria-label="拡大">＋</button>
             <button class="zoom__btn" data-zoom="actual" title="リピート単位を等倍で見る">1:1</button>
             <button class="zoom__btn" id="panModeBtn" title="左ドラッグで画面を動かす">移動</button>
+            <button class="zoom__btn" id="selectPartBtn" title="タップした場所のパーツを、色で拾ってパスにします">パーツ選択</button>
           </div>
           <div class="stage__hud">
             <span id="hudInfo">画像を読み込むと自動で柄になります</span>
@@ -1713,6 +1787,34 @@ output {
             </div>
             <p class="hint" id="exportNote"></p>
             <p class="hint" id="resolutionNote"></p>
+
+            <h3 class="panel__sub">入稿用（色空間・塗り足し）</h3>
+            <div class="row row--split">
+              <label class="field"><span>色空間</span>
+                <select class="select" id="printColorSpace">
+                  <option value="rgb" selected>RGB</option>
+                  <option value="cmyk">CMYK（分版TIFF）</option>
+                </select>
+              </label>
+              <label class="field"><span>塗り足し (cm)</span><input class="input" id="printBleed" type="number" step="0.1" min="0" max="5" value="0" /></label>
+            </div>
+            <div class="row row--split">
+              <label class="field"><span>黒版の作り方</span>
+                <select class="select" id="printBlackGen">
+                  <option value="none">作らない（CMYのみ）</option>
+                  <option value="light" selected>暗部のみ（標準）</option>
+                  <option value="full">最大（インクを抑える）</option>
+                </select>
+              </label>
+              <label class="field"><span>総インク上限 (%)</span><input class="input" id="printMaxInk" type="number" step="10" min="200" max="400" value="320" /></label>
+            </div>
+            <div class="row row--wrap">
+              <button class="btn btn--tiny" data-print="tiff">TIFF で入稿</button>
+              <button class="btn btn--tiny" data-print="pdf">PDF で入稿</button>
+              <button class="btn btn--tiny" data-print="jpeg">JPEG</button>
+              <button class="btn btn--tiny" data-print="png">PNG</button>
+            </div>
+            <p class="hint" id="printNote">CMYK は ICC プロファイルを埋めない素の分版です。業者の指定（Japan Color など）がある場合は、RGB で渡して先方で変換してもらうほうが正確です。</p>
 
             <h3 class="panel__sub">大判シート（必要な場合のみ）</h3>
             <div class="row row--split">
@@ -2178,7 +2280,7 @@ output {
       ...overrides
     };
   }
-  function createPlacement2(overrides = {}) {
+  function createPlacement(overrides = {}) {
     return {
       id: overrides.id ?? `pl-${Math.random().toString(36).slice(2, 9)}`,
       motifId: null,
@@ -2465,7 +2567,7 @@ output {
       const flipY = (gen.flipProbability ?? 0) > 0 ? rngVar.bool(gen.flipProbability * 0.6) : false;
       const x = wrapValue(slot.x + jx + ex + (gen.offsetX ?? 0) * unit.width, unit.width);
       const y = wrapValue(slot.y + jy + ey + (gen.offsetY ?? 0) * unit.height, unit.height);
-      return createPlacement2({
+      return createPlacement({
         motifId: motif.id,
         x,
         y,
@@ -3352,7 +3454,14 @@ output {
     const name = file?.name ?? "";
     const type = (file?.type ?? "").toLowerCase();
     const ext = name.toLowerCase().split(".").pop();
-    if (/heic|heif/.test(type) || ["heic", "heif"].includes(ext)) {
+    const isHeic = /heic|heif/.test(type) || ["heic", "heif"].includes(ext);
+    if (isHeic && typeof createImageBitmap === "function") {
+      try {
+        return await createImageBitmap(file);
+      } catch {
+      }
+    }
+    if (isHeic) {
       throw new Error(
         `\u300C${name}\u300D\u306F HEIC \u5F62\u5F0F\u306E\u305F\u3081\u3001\u3053\u306E\u30D6\u30E9\u30A6\u30B6\u3067\u306F\u8AAD\u3081\u307E\u305B\u3093\u3002iPhone \u306A\u3089\u300C\u8A2D\u5B9A \u2192 \u30AB\u30E1\u30E9 \u2192 \u30D5\u30A9\u30FC\u30DE\u30C3\u30C8 \u2192 \u4E92\u63DB\u6027\u512A\u5148\u300D\u3067 JPEG \u306B\u306A\u308A\u307E\u3059\u3002\u5199\u771F\u30A2\u30D7\u30EA\u304B\u3089\u5171\u6709 \u2192 \u300C\u30D5\u30A1\u30A4\u30EB\u306B\u4FDD\u5B58\u300D\u3067\u3082 JPEG \u306B\u5909\u63DB\u3055\u308C\u307E\u3059`
       );
@@ -3362,9 +3471,12 @@ output {
     }
     if (typeof createImageBitmap === "function") {
       try {
-        const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
-        return bitmap;
+        return await createImageBitmap(file, { imageOrientation: "from-image" });
       } catch {
+        try {
+          return await createImageBitmap(file);
+        } catch {
+        }
       }
     }
     const url = URL.createObjectURL(file);
@@ -4898,7 +5010,7 @@ output {
       let z = 0;
       for (const entry of source) {
         engine2.recipe.placements.push(
-          createPlacement2({
+          createPlacement({
             motifId: motifIds.get(entry.index),
             x: entry.center.x,
             y: entry.center.y,
@@ -4917,7 +5029,7 @@ output {
           const motifId = motifIds.get(candidate.index);
           const target = engine2.recipe.motifs.find((m) => m.id === motifId);
           engine2.recipe.placements.push(
-            createPlacement2({
+            createPlacement({
               motifId,
               x: fragment.center.x,
               y: fragment.center.y,
@@ -6538,7 +6650,7 @@ output {
       let z = 0;
       for (const en of source) {
         if (!inside(en.center.x, en.center.y)) continue;
-        engine2.recipe.placements.push(createPlacement2({ motifId: motifIds.get(en.index), x: en.center.x, y: en.center.y, width: en.canvas.width, height: en.canvas.height, scale: 1, rotation: 0, zIndex: z++ }));
+        engine2.recipe.placements.push(createPlacement({ motifId: motifIds.get(en.index), x: en.center.x, y: en.center.y, width: en.canvas.width, height: en.canvas.height, scale: 1, rotation: 0, zIndex: z++ }));
       }
       let replaced = 0;
       const sizes = complete.map((c) => c.size).sort((x, y) => x - y);
@@ -6567,7 +6679,7 @@ output {
           const py = fr.center.y;
           const sc = Math.min(1.3, Math.max(0.7, fr.size / best.size));
           if (overlaps(px, py, target.width * sc, target.height * sc)) continue;
-          engine2.recipe.placements.push(createPlacement2({ motifId: target.id, x: px, y: py, width: target.width, height: target.height, scale: sc, rotation: 0, zIndex: z++ }));
+          engine2.recipe.placements.push(createPlacement({ motifId: target.id, x: px, y: py, width: target.width, height: target.height, scale: sc, rotation: 0, zIndex: z++ }));
           replaced += 1;
         }
       }
@@ -6673,7 +6785,7 @@ output {
           const x = (col + 0.5) * cell + brickOffset + jx;
           const y = (row + 0.5) * cell + dropOffset + jy;
           engine2.recipe.placements.push(
-            createPlacement2({
+            createPlacement({
               motifId: motif.id,
               x: (x % unitSize + unitSize) % unitSize,
               y: (y % unitSize + unitSize) % unitSize,
@@ -6733,6 +6845,237 @@ output {
       return { ...best.result, score: best.score, seamless: best.seam.percent };
     }
   };
+
+  // src/core/image/RegionSelect.js
+  function selectByColor(canvas, x, y, { tolerance = 36, contiguous = true, edgeStop = 26 } = {}) {
+    const { width, height, data } = getImageData(canvas);
+    const px = Math.max(0, Math.min(width - 1, Math.round(x)));
+    const py = Math.max(0, Math.min(height - 1, Math.round(y)));
+    const i0 = (py * width + px) * 4;
+    const target = { r: data[i0], g: data[i0 + 1], b: data[i0 + 2], a: data[i0 + 3] };
+    const mask = new Uint8Array(width * height);
+    const near = (i) => Math.abs(data[i] - target.r) + Math.abs(data[i + 1] - target.g) + Math.abs(data[i + 2] - target.b) <= tolerance * 3 && Math.abs(data[i + 3] - target.a) <= 80;
+    const step = (from, to) => Math.abs(data[from] - data[to]) + Math.abs(data[from + 1] - data[to + 1]) + Math.abs(data[from + 2] - data[to + 2]) <= edgeStop * 3;
+    let area = 0;
+    if (!contiguous) {
+      for (let p = 0, i = 0; p < mask.length; p++, i += 4) {
+        if (near(i)) {
+          mask[p] = 1;
+          area += 1;
+        }
+      }
+    } else {
+      const stack = new Int32Array(mask.length);
+      let sp = 0;
+      stack[sp++] = py * width + px;
+      mask[py * width + px] = 1;
+      while (sp > 0) {
+        const p = stack[--sp];
+        area += 1;
+        const cx = p % width;
+        const neighbours = [];
+        if (cx > 0) neighbours.push(p - 1);
+        if (cx < width - 1) neighbours.push(p + 1);
+        if (p >= width) neighbours.push(p - width);
+        if (p + width < mask.length) neighbours.push(p + width);
+        for (const q of neighbours) {
+          if (mask[q] || !near(q * 4) || !step(p * 4, q * 4)) continue;
+          mask[q] = 1;
+          stack[sp++] = q;
+        }
+      }
+    }
+    return { mask, width, height, area, ratio: area / (width * height), color: target };
+  }
+  function selectPartAuto(canvas, x, y, { maxRatio = 0.12, minRatio = 8e-4 } = {}) {
+    const settings = [];
+    for (const edgeStop of [14, 20, 26]) {
+      for (const tolerance of [10, 14, 20, 28, 36, 48]) settings.push({ tolerance, edgeStop });
+    }
+    let best = null;
+    for (const s of settings) {
+      const picked = selectByColor(canvas, x, y, s);
+      if (picked.ratio > maxRatio) continue;
+      if (picked.ratio < minRatio) {
+        if (!best || picked.area > best.area) best = { ...picked, ...s, auto: true };
+        continue;
+      }
+      if (!best || best.ratio < minRatio || picked.area > best.area) best = { ...picked, ...s, auto: true };
+    }
+    return best ?? { ...selectByColor(canvas, x, y, { tolerance: 20 }), tolerance: 20, edgeStop: 20, auto: true };
+  }
+  function growMask(mask, width, height, amount = 1) {
+    let current = mask;
+    for (let k = 0; k < Math.abs(amount); k++) {
+      const next = new Uint8Array(current);
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          const p = y * width + x;
+          const n = [p - 1, p + 1, p - width, p + width];
+          if (amount > 0) {
+            if (!current[p] && n.some((q) => current[q])) next[p] = 1;
+          } else if (current[p] && n.some((q) => !current[q])) next[p] = 0;
+        }
+      }
+      current = next;
+    }
+    return current;
+  }
+  function maskToPaths(mask, width, height, { simplify = 1.2, minPoints = 8 } = {}) {
+    const at = (x, y) => x < 0 || y < 0 || x >= width || y >= height ? 0 : mask[y * width + x];
+    const used = /* @__PURE__ */ new Set();
+    const key = (x, y, dir) => `${x},${y},${dir}`;
+    const paths = [];
+    for (let y = 0; y <= height; y++) {
+      for (let x = 0; x <= width; x++) {
+        const inside = at(x, y);
+        const left = at(x - 1, y);
+        if (!(inside && !left)) continue;
+        if (used.has(key(x, y, "v"))) continue;
+        const points = [];
+        let cx = x;
+        let cy = y;
+        let dir = "up";
+        let guard = 0;
+        do {
+          points.push([cx, cy]);
+          used.add(key(cx, cy, "v"));
+          const a = at(cx - 1, cy - 1);
+          const b = at(cx, cy - 1);
+          const c = at(cx - 1, cy);
+          const d = at(cx, cy);
+          const code = (a ? 8 : 0) | (b ? 4 : 0) | (c ? 2 : 0) | (d ? 1 : 0);
+          switch (code) {
+            case 1:
+            case 5:
+            case 13:
+              dir = "down";
+              break;
+            case 2:
+            case 3:
+            case 7:
+              dir = "left";
+              break;
+            case 4:
+            case 12:
+            case 14:
+              dir = "right";
+              break;
+            case 8:
+            case 10:
+            case 11:
+              dir = "up";
+              break;
+            case 6:
+              dir = dir === "up" ? "left" : "right";
+              break;
+            case 9:
+              dir = dir === "right" ? "up" : "down";
+              break;
+            default:
+              dir = null;
+          }
+          if (!dir) break;
+          if (dir === "up") cy -= 1;
+          else if (dir === "down") cy += 1;
+          else if (dir === "left") cx -= 1;
+          else cx += 1;
+          guard += 1;
+        } while ((cx !== x || cy !== y) && guard < width * height * 4);
+        if (points.length >= minPoints) paths.push(simplify > 0 ? simplifyPath(points, simplify) : points);
+      }
+    }
+    const areaOf = (pts) => {
+      let a = 0;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        a += (pts[j][0] + pts[i][0]) * (pts[j][1] - pts[i][1]);
+      }
+      return Math.abs(a / 2);
+    };
+    const scored = paths.map((p) => ({ p, a: areaOf(p) })).sort((x, y) => y.a - x.a);
+    const biggest = scored[0]?.a ?? 0;
+    return scored.filter((s2) => s2.a >= biggest * 0.02).map((s2) => s2.p);
+  }
+  function simplifyPath(points, tolerance = 1.2) {
+    if (points.length < 3) return points;
+    const sqTol = tolerance * tolerance;
+    const sqSegDist = (p, a, b) => {
+      let x = a[0];
+      let y = a[1];
+      let dx = b[0] - x;
+      let dy = b[1] - y;
+      if (dx !== 0 || dy !== 0) {
+        const t = ((p[0] - x) * dx + (p[1] - y) * dy) / (dx * dx + dy * dy);
+        if (t > 1) {
+          x = b[0];
+          y = b[1];
+        } else if (t > 0) {
+          x += dx * t;
+          y += dy * t;
+        }
+      }
+      dx = p[0] - x;
+      dy = p[1] - y;
+      return dx * dx + dy * dy;
+    };
+    const step = (first, last, out2) => {
+      let maxSq = sqTol;
+      let index = -1;
+      for (let i = first + 1; i < last; i++) {
+        const sq = sqSegDist(points[i], points[first], points[last]);
+        if (sq > maxSq) {
+          maxSq = sq;
+          index = i;
+        }
+      }
+      if (index === -1) return;
+      step(first, index, out2);
+      out2.push(points[index]);
+      step(index, last, out2);
+    };
+    const out = [points[0]];
+    step(0, points.length - 1, out);
+    out.push(points[points.length - 1]);
+    return out;
+  }
+  function pathsToSvg(paths) {
+    return paths.map((pts) => `M${pts.map(([x, y]) => `${Math.round(x * 10) / 10},${Math.round(y * 10) / 10}`).join("L")}Z`).join(" ");
+  }
+  function cutMask(canvas, mask, width, height) {
+    const { data } = getImageData(canvas);
+    let minX = width;
+    let minY = height;
+    let maxX = -1;
+    let maxY = -1;
+    for (let p = 0; p < mask.length; p++) {
+      if (!mask[p]) continue;
+      const x = p % width;
+      const y = p / width | 0;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+    if (maxX < 0) return null;
+    const w = maxX - minX + 1;
+    const h = maxY - minY + 1;
+    const out = createCanvas2(w, h);
+    const c = ctx2d(out);
+    const img = c.createImageData(w, h);
+    for (let p = 0; p < mask.length; p++) {
+      if (!mask[p]) continue;
+      const x = p % width;
+      const y = p / width | 0;
+      const src = p * 4;
+      const dst = ((y - minY) * w + (x - minX)) * 4;
+      img.data[dst] = data[src];
+      img.data[dst + 1] = data[src + 1];
+      img.data[dst + 2] = data[src + 2];
+      img.data[dst + 3] = 255;
+    }
+    c.putImageData(img, 0, 0);
+    return { canvas: out, bounds: { x: minX, y: minY, width: w, height: h } };
+  }
 
   // src/core/pattern/PatternEngine.js
   init_SeededRandom();
@@ -7609,6 +7952,135 @@ output {
         placements: this.recipe.placements.length,
         note: `${found.length} \u500B\u306B\u5206\u3051\u305F\uFF08\u4E38\u3054\u3068 ${whole.length}\u30FB\u5207\u308C ${cut}${splitCount ? `\u30FB\u304F\u3063\u3064\u304D\u3092\u5207\u308A\u5206\u3051 ${splitCount}` : ""}\uFF09\u2192 \u4E38\u3054\u3068\u306E ${usable.length} \u7A2E\u3092\u91CD\u306A\u3089\u306A\u3044\u3088\u3046\u306B\u6563\u3089\u3057\u76F4\u3057\uFF08${this.recipe.placements.length} \u914D\u7F6E\uFF09`
       };
+    }
+    // ---- パーツの選択（色で拾い、パスにする）----------------------------
+    /**
+     * 単位座標 (x, y) の位置にあるパーツを、色で拾ってパスにする。
+     * 背景が画像の柄では入稿画像から、モチーフの柄では単位の描画から拾う。
+     * 選択結果は engine.selection に持つ（Recipe には入れない＝保存対象外）。
+     */
+    selectPartAt(x, y, { tolerance = null, edgeStop = null, contiguous = true, grow = 1 } = {}) {
+      const bg = this.recipe.background;
+      const source = bg.type === "image" && bg.imageId ? this.imageStore.getCanvas(bg.imageId) : this.renderUnit({ scale: 1, useCache: false });
+      if (!source) return { selected: false, reason: "\u9078\u3079\u308B\u753B\u50CF\u304C\u3042\u308A\u307E\u305B\u3093" };
+      const unit = this.recipe.repeatUnit;
+      const sx = x / unit.width * source.width;
+      const sy = y / unit.height * source.height;
+      const picked = tolerance == null ? selectPartAuto(source, sx, sy) : selectByColor(source, sx, sy, { tolerance, contiguous, edgeStop: edgeStop ?? 20 });
+      this._lastPick = {
+        x,
+        y,
+        tolerance: tolerance ?? picked.tolerance ?? 20,
+        edgeStop: edgeStop ?? picked.edgeStop ?? 20
+      };
+      if (!picked.area) return { selected: false, reason: "\u305D\u306E\u5834\u6240\u306B\u306F\u62FE\u3048\u308B\u30D1\u30FC\u30C4\u304C\u3042\u308A\u307E\u305B\u3093" };
+      const mask = grow ? growMask(picked.mask, picked.width, picked.height, grow) : picked.mask;
+      const paths = maskToPaths(mask, picked.width, picked.height, { simplify: 1.2 });
+      const kx = unit.width / picked.width;
+      const ky = unit.height / picked.height;
+      const unitPaths = paths.map((pts) => pts.map(([px, py]) => [px * kx, py * ky]));
+      this.selection = {
+        mask,
+        width: picked.width,
+        height: picked.height,
+        paths,
+        unitPaths,
+        area: picked.area,
+        ratio: picked.ratio,
+        color: picked.color,
+        sourceIsBackground: bg.type === "image" && !!bg.imageId
+      };
+      return {
+        selected: true,
+        area: picked.area,
+        tolerance: picked.tolerance ?? tolerance,
+        auto: !!picked.auto,
+        ratio: Math.round(picked.ratio * 1e3) / 1e3,
+        paths: unitPaths,
+        points: unitPaths.reduce((n, p) => n + p.length, 0),
+        svg: pathsToSvg(unitPaths)
+      };
+    }
+    clearSelection() {
+      this.selection = null;
+      this._lastPick = null;
+    }
+    /**
+     * 直前の選択を、同じ場所のまま広げる／狭める。
+     * 自動が外したときに、タップし直さず調整できる。
+     */
+    adjustSelection(direction = 1) {
+      const last = this._lastPick;
+      if (!last) return { selected: false, reason: "\u5148\u306B\u30D1\u30FC\u30C4\u3092\u9078\u3093\u3067\u304F\u3060\u3055\u3044" };
+      const steps = [8, 12, 16, 20, 26, 34, 44, 58, 76];
+      if (last.step == null) {
+        const found = steps.findIndex((v) => v >= (last.tolerance ?? 20));
+        last.step = found < 0 ? steps.length - 1 : found;
+      }
+      last.step = Math.max(0, Math.min(steps.length - 1, last.step + (direction > 0 ? 1 : -1)));
+      const nextStep = last.step;
+      const result = this.selectPartAt(last.x, last.y, { tolerance: steps[nextStep], edgeStop: last.edgeStop });
+      this._lastPick.step = nextStep;
+      return result;
+    }
+    /** 選択中のパーツを消す（周囲の地で埋める） */
+    deleteSelection() {
+      const sel = this.selection;
+      if (!sel) return { deleted: false, reason: "\u9078\u629E\u304C\u3042\u308A\u307E\u305B\u3093" };
+      const bg = this.recipe.background;
+      if (!(bg.type === "image" && bg.imageId)) return { deleted: false, reason: "\u753B\u50CF\u306E\u67C4\u3067\u306E\u307F\u6D88\u305B\u307E\u3059" };
+      const source = this.imageStore.getCanvas(bg.imageId);
+      const filled = fillHoles(source, sel.mask, { seed: this.recipe.randomization.seed });
+      const entry = this.imageStore.add(filled, { name: "\u30D1\u30FC\u30C4\u3092\u524A\u9664" });
+      this.recipe.background = { ...bg, imageId: entry.id };
+      this.selection = null;
+      this.markDirty();
+      return { deleted: true, area: sel.area };
+    }
+    /**
+     * 選択中のパーツをモチーフにする。
+     * 背景からは消し、同じ位置に配置として置き直す（見た目は変わらないが、以後は動かせる）。
+     */
+    selectionToMotif({ keepInBackground = false } = {}) {
+      const sel = this.selection;
+      if (!sel) return { applied: false, reason: "\u9078\u629E\u304C\u3042\u308A\u307E\u305B\u3093" };
+      const bg = this.recipe.background;
+      const source = bg.type === "image" && bg.imageId ? this.imageStore.getCanvas(bg.imageId) : this.renderUnit({ scale: 1, useCache: false });
+      const cut = cutMask(source, sel.mask, sel.width, sel.height);
+      if (!cut) return { applied: false, reason: "\u5207\u308A\u51FA\u305B\u307E\u305B\u3093\u3067\u3057\u305F" };
+      const unit = this.recipe.repeatUnit;
+      const kx = unit.width / sel.width;
+      const ky = unit.height / sel.height;
+      const image = this.imageStore.add(cut.canvas, { name: "\u30D1\u30FC\u30C4" });
+      const motif = createMotif({
+        name: `\u30D1\u30FC\u30C4 ${this.recipe.motifs.length + 1}`,
+        sourceImage: image.id,
+        width: cut.canvas.width * kx,
+        height: cut.canvas.height * ky,
+        scale: 1,
+        weight: 10
+      });
+      this.recipe.motifs.push(motif);
+      this.recipe.placements.push(
+        createPlacement({
+          motifId: motif.id,
+          x: (cut.bounds.x + cut.bounds.width / 2) * kx,
+          y: (cut.bounds.y + cut.bounds.height / 2) * ky,
+          width: motif.width,
+          height: motif.height,
+          scale: 1,
+          rotation: 0,
+          zIndex: this.recipe.placements.length
+        })
+      );
+      if (!keepInBackground && bg.type === "image" && bg.imageId) {
+        const filled = fillHoles(source, sel.mask, { seed: this.recipe.randomization.seed });
+        const entry = this.imageStore.add(filled, { name: "\u30D1\u30FC\u30C4\u3092\u5207\u308A\u51FA\u3057\u305F\u80CC\u666F" });
+        this.recipe.background = { ...bg, imageId: entry.id };
+      }
+      this.selection = null;
+      this.markDirty();
+      return { applied: true, motifId: motif.id, size: { width: cut.canvas.width, height: cut.canvas.height } };
     }
     /** 総柄でない絵（1点もの・余白のある絵・パネル）から総柄を組み立てる */
     composeAllOver(canvas, options = {}) {
@@ -8638,9 +9110,17 @@ output {
     }
     return Uint8Array.from(out);
   }
-  function encodeTiff(imageData, { dpi = 300, alpha = false, compression = "lzw", software = "rekuredool pattern Design" } = {}) {
+  function encodeTiff(imageData, {
+    dpi = 300,
+    alpha = false,
+    compression = "lzw",
+    software = "rekuredool pattern Design",
+    colorSpace = "rgb"
+    // 'rgb' | 'cmyk'
+  } = {}) {
     const { width, height, data } = imageData;
-    const samples = alpha ? 4 : 3;
+    const cmyk = colorSpace === "cmyk";
+    const samples = cmyk ? 4 : alpha ? 4 : 3;
     const bytesPerRow = width * samples;
     const targetBytes = 256 * 1024;
     const rowsPerStrip = Math.max(1, Math.min(height, Math.floor(targetBytes / Math.max(1, bytesPerRow)) || 1));
@@ -8658,7 +9138,7 @@ output {
           row[x * samples] = data[i];
           row[x * samples + 1] = data[i + 1];
           row[x * samples + 2] = data[i + 2];
-          if (alpha) row[x * samples + 3] = data[i + 3];
+          if (cmyk || alpha) row[x * samples + 3] = data[i + 3];
         }
         raw.set(row, p);
         p += bytesPerRow;
@@ -8675,7 +9155,7 @@ output {
     });
     const compressionCode = compression === "lzw" ? 5 : compression === "packbits" ? 32773 : 1;
     addEntry(TAG.Compression, TYPE.SHORT, 1, compressionCode);
-    addEntry(TAG.Photometric, TYPE.SHORT, 1, 2);
+    addEntry(TAG.Photometric, TYPE.SHORT, 1, cmyk ? 5 : 2);
     addEntry(TAG.StripOffsets, TYPE.LONG, stripCount, null, { placeholder: "stripOffsets" });
     addEntry(TAG.SamplesPerPixel, TYPE.SHORT, 1, samples);
     addEntry(TAG.RowsPerStrip, TYPE.LONG, 1, rowsPerStrip);
@@ -8822,6 +9302,164 @@ output {
     return out;
   }
 
+  // src/export/ColorConvert.js
+  function rgbToCmyk(imageData, { blackGeneration = "light", maxInk = 320 } = {}) {
+    const { width, height, data } = imageData;
+    const out = new Uint8Array(width * height * 4);
+    const limit = maxInk / 100 * 255;
+    for (let i = 0, o = 0; i < data.length; i += 4, o += 4) {
+      const r = data[i] / 255;
+      const g = data[i + 1] / 255;
+      const b = data[i + 2] / 255;
+      let c = 1 - r;
+      let m = 1 - g;
+      let y = 1 - b;
+      const minimum = Math.min(c, m, y);
+      let k = 0;
+      if (blackGeneration === "full") k = minimum;
+      else if (blackGeneration === "light") k = Math.max(0, minimum - 0.25) / 0.75;
+      if (k > 0) {
+        const denom = 1 - k;
+        if (denom > 1e-4) {
+          c = (c - k) / denom;
+          m = (m - k) / denom;
+          y = (y - k) / denom;
+        } else {
+          c = 0;
+          m = 0;
+          y = 0;
+        }
+      }
+      c = Math.max(0, Math.min(1, c));
+      m = Math.max(0, Math.min(1, m));
+      y = Math.max(0, Math.min(1, y));
+      k = Math.max(0, Math.min(1, k));
+      let C = c * 255;
+      let M = m * 255;
+      let Y = y * 255;
+      const K = k * 255;
+      const total = C + M + Y + K;
+      if (total > limit) {
+        const room = Math.max(0, limit - K);
+        const cmy = C + M + Y;
+        if (cmy > room && cmy > 0) {
+          const scale = room / cmy;
+          C *= scale;
+          M *= scale;
+          Y *= scale;
+        }
+      }
+      out[o] = Math.round(C);
+      out[o + 1] = Math.round(M);
+      out[o + 2] = Math.round(Y);
+      out[o + 3] = Math.round(K);
+    }
+    return { data: out, width, height };
+  }
+  function measureInkCoverage(cmyk) {
+    const { data } = cmyk;
+    let max = 0;
+    let sum = 0;
+    let n = 0;
+    for (let i = 0; i < data.length; i += 4 * 7) {
+      const total = (data[i] + data[i + 1] + data[i + 2] + data[i + 3]) / 255 * 100;
+      if (total > max) max = total;
+      sum += total;
+      n += 1;
+    }
+    return { max: Math.round(max), mean: Math.round(sum / (n || 1)) };
+  }
+
+  // src/export/PdfWriter.js
+  function esc(str) {
+    return str.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+  }
+  function buildPdfWithImage(jpegBytes, { widthPx, heightPx, widthCm, heightCm, bleedCm = 0, title = "pattern" }) {
+    const cmToPt = (cm) => cm / 2.54 * 72;
+    const trimW = cmToPt(widthCm);
+    const trimH = cmToPt(heightCm);
+    const bleed = cmToPt(bleedCm);
+    const mediaW = trimW + bleed * 2;
+    const mediaH = trimH + bleed * 2;
+    const objects = [];
+    const push = (body) => {
+      objects.push(body);
+      return objects.length;
+    };
+    const catalogId = push(null);
+    const pagesId = push(null);
+    const pageId = push(null);
+    const contentId = push(null);
+    const imageId = push(null);
+    const content = `q
+${mediaW} 0 0 ${mediaH} 0 0 cm
+/Im0 Do
+Q
+`;
+    objects[catalogId - 1] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
+    objects[pagesId - 1] = `<< /Type /Pages /Kids [${pageId} 0 R] /Count 1 >>`;
+    objects[pageId - 1] = `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${mediaW.toFixed(2)} ${mediaH.toFixed(2)}] /TrimBox [${bleed.toFixed(2)} ${bleed.toFixed(2)} ${(bleed + trimW).toFixed(2)} ${(bleed + trimH).toFixed(2)}] /BleedBox [0 0 ${mediaW.toFixed(2)} ${mediaH.toFixed(2)}] /Resources << /XObject << /Im0 ${imageId} 0 R >> >> /Contents ${contentId} 0 R >>`;
+    objects[contentId - 1] = { stream: new TextEncoder().encode(content), dict: `<< /Length ${content.length} >>` };
+    objects[imageId - 1] = {
+      stream: jpegBytes,
+      dict: `<< /Type /XObject /Subtype /Image /Width ${widthPx} /Height ${heightPx} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpegBytes.length} >>`
+    };
+    const chunks = [];
+    const offsets = [0];
+    let position = 0;
+    const write = (bytes) => {
+      chunks.push(bytes);
+      position += bytes.length;
+    };
+    const writeText = (text) => write(new TextEncoder().encode(text));
+    writeText(`%PDF-1.4
+%\xE2\xE3\xCF\xD3
+`);
+    objects.forEach((obj, i) => {
+      offsets[i + 1] = position;
+      if (obj && obj.stream) {
+        writeText(`${i + 1} 0 obj
+${obj.dict}
+stream
+`);
+        write(obj.stream);
+        writeText(`
+endstream
+endobj
+`);
+      } else {
+        writeText(`${i + 1} 0 obj
+${obj}
+endobj
+`);
+      }
+    });
+    const xrefPos = position;
+    let xref = `xref
+0 ${objects.length + 1}
+0000000000 65535 f 
+`;
+    for (let i = 1; i <= objects.length; i++) xref += `${String(offsets[i]).padStart(10, "0")} 00000 n 
+`;
+    writeText(xref);
+    writeText(
+      `trailer
+<< /Size ${objects.length + 1} /Root ${catalogId} 0 R /Info << /Title (${esc(title)}) /Producer (rekuredool pattern Design) >> >>
+startxref
+${xrefPos}
+%%EOF
+`
+    );
+    const total = chunks.reduce((n, c) => n + c.length, 0);
+    const out = new Uint8Array(total);
+    let p = 0;
+    for (const c of chunks) {
+      out.set(c, p);
+      p += c.length;
+    }
+    return out;
+  }
+
   // src/export/PatternExporter.js
   var PatternExporter = class {
     constructor(engine2) {
@@ -8860,6 +9498,83 @@ output {
       };
     }
     /** 生地の見た目確認用プレビュー */
+    /**
+     * 入稿用の書き出し。形式と色空間、塗り足しを選べる。
+     * @param {{format?:'tiff'|'jpeg'|'png'|'pdf', colorSpace?:'rgb'|'cmyk',
+     *          bleedCm?:number, blackGeneration?:'none'|'light'|'full', maxInk?:number,
+     *          dpi?:number, widthCm?:number, name?:string}} options
+     */
+    async exportForPrint({
+      format = "tiff",
+      colorSpace = "rgb",
+      bleedCm = 0,
+      blackGeneration = "light",
+      maxInk = 320,
+      dpi = null,
+      widthCm = null,
+      name = null
+    } = {}) {
+      const unit = this.engine.recipe.repeatUnit;
+      const useDpi = dpi ?? this.engine.recipe.canvas.dpi;
+      const useWidthCm = widthCm ?? this.engine.recipe.canvas.physicalWidthCm;
+      const base = this.exportRepeatUnit({ dpi: useDpi, widthCm: useWidthCm });
+      let canvas = base.canvas;
+      let bleedPx = 0;
+      if (bleedCm > 0) {
+        bleedPx = Math.round(bleedCm / 2.54 * useDpi);
+        const w = canvas.width;
+        const h = canvas.height;
+        const out = createCanvas2(w + bleedPx * 2, h + bleedPx * 2);
+        const c = ctx2d(out);
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) c.drawImage(canvas, bleedPx + dx * w, bleedPx + dy * h);
+        }
+        canvas = out;
+      }
+      const heightCm = canvas.height / useDpi * 2.54;
+      const fileBase = name ?? `${slug(this.engine.recipe.name)}_${Math.round(useWidthCm)}cm_${useDpi}dpi${colorSpace === "cmyk" ? "_CMYK" : ""}${bleedCm ? `_bleed${bleedCm}cm` : ""}`;
+      const imageData = ctx2d(canvas).getImageData(0, 0, canvas.width, canvas.height);
+      if (format === "pdf") {
+        const blob = await canvasToBlob(canvas, "image/jpeg", 0.95);
+        const jpeg = new Uint8Array(await blob.arrayBuffer());
+        const pdf = buildPdfWithImage(jpeg, {
+          widthPx: canvas.width,
+          heightPx: canvas.height,
+          widthCm: canvas.width / useDpi * 2.54 - bleedCm * 2,
+          heightCm: heightCm - bleedCm * 2,
+          bleedCm,
+          title: this.engine.recipe.name
+        });
+        await triggerDownload(new Blob([pdf], { type: "application/pdf" }), `${fileBase}.pdf`);
+        return { format: "pdf", widthPx: canvas.width, heightPx: canvas.height, bleedPx, colorSpace: "rgb" };
+      }
+      if (colorSpace === "cmyk") {
+        const cmyk = rgbToCmyk(imageData, { blackGeneration, maxInk });
+        const ink = measureInkCoverage(cmyk);
+        const bytes2 = encodeTiff({ width: cmyk.width, height: cmyk.height, data: cmyk.data }, {
+          dpi: useDpi,
+          compression: "lzw",
+          colorSpace: "cmyk"
+        });
+        await triggerDownload(new Blob([bytes2], { type: "image/tiff" }), `${fileBase}.tif`);
+        return { format: "tiff", colorSpace: "cmyk", widthPx: cmyk.width, heightPx: cmyk.height, bleedPx, ink };
+      }
+      if (format === "jpeg") {
+        const blob = await canvasToBlob(canvas, "image/jpeg", 0.95);
+        const withDpi = withJpegDpi(await blob.arrayBuffer(), useDpi);
+        await triggerDownload(new Blob([withDpi], { type: "image/jpeg" }), `${fileBase}.jpg`);
+        return { format: "jpeg", colorSpace: "rgb", widthPx: canvas.width, heightPx: canvas.height, bleedPx };
+      }
+      if (format === "png") {
+        const blob = await canvasToBlob(canvas, "image/png");
+        const withDpi = withPngDpi(await blob.arrayBuffer(), useDpi);
+        await triggerDownload(new Blob([withDpi], { type: "image/png" }), `${fileBase}.png`);
+        return { format: "png", colorSpace: "rgb", widthPx: canvas.width, heightPx: canvas.height, bleedPx };
+      }
+      const bytes = encodeTiff(imageData, { dpi: useDpi, compression: "lzw" });
+      await triggerDownload(new Blob([bytes], { type: "image/tiff" }), `${fileBase}.tif`);
+      return { format: "tiff", colorSpace: "rgb", widthPx: canvas.width, heightPx: canvas.height, bleedPx };
+    }
     /** 印刷用シート（生地幅×長さ）を TIFF/JPEG で書き出す */
     async exportPrintSheet({ widthCm, heightCm, dpi = 150, format = "tiff", name = "print-sheet" } = {}) {
       const sheet = this.engine.renderPrintSheet({ widthCm, heightCm, dpi, upscale: "lanczos" });
@@ -9108,6 +9823,8 @@ output {
       this.pointers = /* @__PURE__ */ new Map();
       this._tileShift = { x: 0, y: 0 };
       this.panMode = false;
+      this.selectPartMode = false;
+      this.selectionPaths = null;
       this.pinch = null;
       this.onZoom = onZoom;
       this.selection = /* @__PURE__ */ new Set();
@@ -9257,6 +9974,16 @@ output {
       this.dimSurround = !!v;
       this.requestRender();
     }
+    setSelectPartMode(on) {
+      this.selectPartMode = !!on;
+      this.canvas.style.cursor = this.selectPartMode ? "copy" : "crosshair";
+      if (!on) this.selectionPaths = null;
+      this.requestRender();
+    }
+    setSelectionPaths(paths) {
+      this.selectionPaths = paths && paths.length ? paths : null;
+      this.requestRender();
+    }
     setPanMode(on) {
       this.panMode = !!on;
       this.canvas.style.cursor = this.panMode ? "grab" : "crosshair";
@@ -9296,7 +10023,7 @@ output {
       if (!motif) return null;
       this.engine.pushHistory(`${motif.name} \u3092\u914D\u7F6E`);
       const unit = this.engine.recipe.repeatUnit;
-      const placement = createPlacement2({
+      const placement = createPlacement({
         motifId,
         x: unit.width / 2,
         y: unit.height / 2,
@@ -9322,7 +10049,7 @@ output {
       const unit = this.engine.recipe.repeatUnit;
       const step = Math.min(unit.width, unit.height) * 0.06;
       const copies = targets.map(
-        (p, i) => createPlacement2({
+        (p, i) => createPlacement({
           ...p,
           id: void 0,
           x: wrapValue(p.x + step, unit.width),
@@ -9494,6 +10221,29 @@ output {
       ctx.imageSmoothingQuality = "high";
       ctx.drawImage(sheet, 0, 0, sheetW, sheetH, 0, 0, canvas.width, canvas.height);
       ctx.restore();
+      if (this.selectionPaths) {
+        ctx.save();
+        ctx.translate(originX + this._tileShift.x * vs, originY + this._tileShift.y * vs);
+        ctx.scale(vs, vs);
+        for (const pass of [
+          { color: "rgba(0,0,0,0.85)", width: 3 / vs, dash: [] },
+          { color: "#ffffff", width: 1.4 / vs, dash: [6 / vs, 4 / vs] }
+        ]) {
+          ctx.strokeStyle = pass.color;
+          ctx.lineWidth = pass.width;
+          ctx.setLineDash(pass.dash);
+          for (const pts of this.selectionPaths) {
+            if (pts.length < 2) continue;
+            ctx.beginPath();
+            ctx.moveTo(pts[0][0], pts[0][1]);
+            for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+            ctx.closePath();
+            ctx.stroke();
+          }
+        }
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
       if (this.showBoundary) {
         ctx.save();
         ctx.translate(originX, originY);
@@ -9764,6 +10514,12 @@ output {
         return;
       }
       if (this.pointers.size > 2) return;
+      if (this.selectPartMode && e.button === 0 && this.pointers.size === 1) {
+        const pos2 = this.#pointerPos(e);
+        const p = this.stageToUnit(pos2.x, pos2.y);
+        this.onSelectPart?.(p.x, p.y, e);
+        return;
+      }
       if (this.panMode || e.button === 1 || this.spaceDown) {
         this.drag = { mode: "pan", last: pos };
         return;
@@ -11519,7 +12275,24 @@ output {
     renderColorways();
   }
   function bindEvents() {
-    $("fileInput").addEventListener("change", (e) => handleFiles([...e.target.files]));
+    $("fileInput").addEventListener("change", (e) => {
+      handleFiles([...e.target.files]);
+      e.target.value = "";
+    });
+    for (const [labelSelector, inputId] of [
+      ['label[for="fileInput"]', "fileInput"],
+      ['label[for="garmentInput"]', "garmentInput"],
+      ['label[for="projectInput"]', "projectInput"],
+      ['label[for="recipeInput"]', "recipeInput"]
+    ]) {
+      const label2 = document.querySelector(labelSelector);
+      if (!label2) continue;
+      label2.addEventListener("click", (e) => {
+        if (e.target.tagName === "INPUT") return;
+        e.preventDefault();
+        $(inputId).click();
+      });
+    }
     $("autoBtn").addEventListener("click", () => runAuto());
     $("cutBtn").addEventListener("click", () => {
       if (engine.recipe.background.type !== "image") {
@@ -11656,6 +12429,80 @@ output {
       if (file) openProjectFile(file);
       e.target.value = "";
     });
+    const setPartButtons = (enabled) => {
+      for (const id of ["partDeleteBtn", "partMotifBtn", "partSvgBtn", "partClearBtn", "partNarrowBtn", "partWidenBtn"])
+        $(id).disabled = !enabled;
+    };
+    const clearPart = () => {
+      engine.clearSelection();
+      editor.setSelectionPaths(null);
+      setPartButtons(false);
+      $("partsInfo").textContent = "\u67C4\u3092\u30BF\u30C3\u30D7\u3059\u308B\u3068\u30D1\u30FC\u30C4\u3092\u62FE\u3044\u307E\u3059";
+    };
+    $("selectPartBtn").addEventListener("click", () => {
+      const on = !editor.selectPartMode;
+      editor.setSelectPartMode(on);
+      $("selectPartBtn").classList.toggle("is-active", on);
+      $("partsBar").hidden = !on;
+      document.querySelector(".stage")?.classList.toggle("is-picking", on);
+      if (on && editor.panMode) {
+        editor.setPanMode(false);
+        $("panModeBtn").classList.remove("is-active");
+      }
+      if (!on) clearPart();
+      toast(on ? "\u67C4\u3092\u30BF\u30C3\u30D7\u3059\u308B\u3068\u30D1\u30FC\u30C4\u3092\u62FE\u3044\u307E\u3059" : "\u30D1\u30FC\u30C4\u9078\u629E\u3092\u7D42\u4E86\u3057\u307E\u3057\u305F");
+    });
+    const showPick = (result) => {
+      if (!result.selected) {
+        $("partsInfo").textContent = result.reason;
+        setPartButtons(false);
+        return;
+      }
+      editor.setSelectionPaths(result.paths);
+      setPartButtons(true);
+      $("partsInfo").textContent = `\u9762\u7A4D ${(result.ratio * 100).toFixed(1)}%\u30FB\u8F2A\u90ED ${result.paths.length} \u672C\u30FB${result.points} \u70B9\uFF08\u8A31\u5BB9 ${result.tolerance}${result.auto ? "\u30FB\u81EA\u52D5" : ""}\uFF09`;
+    };
+    editor.onSelectPart = (x, y) => {
+      const result = engine.selectPartAt(x, y);
+      showPick(result);
+    };
+    $("partWidenBtn").addEventListener("click", () => showPick(engine.adjustSelection(1)));
+    $("partNarrowBtn").addEventListener("click", () => showPick(engine.adjustSelection(-1)));
+    $("partDeleteBtn").addEventListener("click", () => {
+      engine.pushHistory("\u30D1\u30FC\u30C4\u3092\u524A\u9664");
+      const r = engine.deleteSelection();
+      if (!r.deleted) {
+        toast(r.reason);
+        return;
+      }
+      clearPart();
+      refreshAll();
+      renderQuality(engine.evaluate());
+      renderSeamless(engine.checkSeamless());
+      toast("\u30D1\u30FC\u30C4\u3092\u524A\u9664\u3057\u307E\u3057\u305F");
+    });
+    $("partMotifBtn").addEventListener("click", () => {
+      engine.pushHistory("\u30D1\u30FC\u30C4\u3092\u30E2\u30C1\u30FC\u30D5\u306B\u3059\u308B");
+      const r = engine.selectionToMotif();
+      if (!r.applied) {
+        toast(r.reason);
+        return;
+      }
+      clearPart();
+      refreshAll();
+      renderQuality(engine.evaluate());
+      toast(`\u30E2\u30C1\u30FC\u30D5\u306B\u3057\u307E\u3057\u305F\uFF08${r.size.width}\xD7${r.size.height}px\uFF09\u3002\u4EE5\u5F8C\u306F\u52D5\u304B\u305B\u307E\u3059`);
+    });
+    $("partSvgBtn").addEventListener("click", () => {
+      const sel = engine.selection;
+      if (!sel) return;
+      const unit = engine.recipe.repeatUnit;
+      const d = sel.unitPaths.map((pts) => `M${pts.map(([x, y]) => `${Math.round(x * 10) / 10},${Math.round(y * 10) / 10}`).join("L")}Z`).join(" ");
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${unit.width} ${unit.height}"><path d="${d}" fill="none" stroke="#000" stroke-width="2"/></svg>`;
+      exporter.downloadText(svg, `part-${Date.now().toString(36)}.svg`, "image/svg+xml");
+      toast("\u30D1\u30B9\u3092 SVG \u3067\u66F8\u304D\u51FA\u3057\u307E\u3057\u305F\uFF08Illustrator \u306A\u3069\u3067\u958B\u3051\u307E\u3059\uFF09");
+    });
+    $("partClearBtn").addEventListener("click", clearPart);
     $("panModeBtn").addEventListener("click", () => {
       const on = !editor.panMode;
       editor.setPanMode(on);
@@ -11977,6 +12824,31 @@ output {
         toast(`\u30B7\u30FC\u30C8\u306E\u66F8\u304D\u51FA\u3057\u306B\u5931\u6557: ${e.message}`, 6e3);
       }
     };
+    document.querySelectorAll("[data-print]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const format = btn.dataset.print;
+        const colorSpace = $("printColorSpace").value;
+        const bleedCm = parseFloat($("printBleed").value) || 0;
+        const blackGeneration = $("printBlackGen").value;
+        const maxInk = parseInt($("printMaxInk").value, 10) || 320;
+        if (format === "pdf" && colorSpace === "cmyk") {
+          toast("PDF \u306F RGB \u3067\u66F8\u304D\u51FA\u3057\u307E\u3059\u3002CMYK \u304C\u5FC5\u8981\u306A\u5834\u5408\u306F TIFF \u3092\u9078\u3093\u3067\u304F\u3060\u3055\u3044", 6e3);
+        }
+        btn.disabled = true;
+        toast("\u66F8\u304D\u51FA\u3057\u3066\u3044\u307E\u3059\u2026", 6e4);
+        try {
+          await new Promise((r2) => setTimeout(r2, 30));
+          const r = await exporter.exportForPrint({ format, colorSpace, bleedCm, blackGeneration, maxInk });
+          const inkNote = r.ink ? `\uFF0F\u7DCF\u30A4\u30F3\u30AF \u6700\u5927 ${r.ink.max}%\u30FB\u5E73\u5747 ${r.ink.mean}%` : "";
+          const bleedNote = r.bleedPx ? `\uFF0F\u5857\u308A\u8DB3\u3057 ${bleedCm}cm\uFF08${r.bleedPx}px\uFF09` : "";
+          toast(`${r.format.toUpperCase()}\uFF08${r.colorSpace.toUpperCase()}\uFF09${r.widthPx}\xD7${r.heightPx}px${bleedNote}${inkNote}`, 7e3);
+        } catch (e) {
+          toast(`\u66F8\u304D\u51FA\u3057\u306B\u5931\u6557: ${e.message}`, 6e3);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
     $("sheetTiffBtn").addEventListener("click", () => exportSheet("tiff"));
     $("sheetJpegBtn").addEventListener("click", () => exportSheet("jpeg"));
     $("evaluateBtn").addEventListener("click", () => {
