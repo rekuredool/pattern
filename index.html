@@ -1495,6 +1495,9 @@ output {
           <button class="btn btn--change" id="changeBtn" title="別の案を試す（シームレスの4条件を通った案だけを順に表示）">
             CHANGE PATTERN
           </button>
+          <label class="btn btn--ghost" for="mixInput" title="いま読み込んでいる絵を「地」にして、選んだ絵から取り出した柄を散らします">2枚を合わせる
+            <input id="mixInput" type="file" accept="image/*,.heic,.heif" hidden />
+          </label>
           <label class="btn btn--ghost btn--garment" for="garmentInput" title="服の写真を選んで、散らし・上向き・重なりなしの総柄にする">洋服モード
             <input id="garmentInput" type="file" accept="image/*,.heic,.heif" hidden />
           </label>
@@ -2314,7 +2317,8 @@ output {
     return {
       schemaVersion: overrides.schemaVersion ?? 2,
       // 復元時に id と名前が落ちていた（Recipe JSON を読み込んでも名無しに戻る不具合）
-      id: overrides.id ?? `recipe-${Date.now().toString(36)}`,
+      // 時刻だけだと、同じミリ秒に作った柄で id が衝突する（保存の連番が混ざった）
+      id: overrides.id ?? `recipe-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
       name: overrides.name ?? "Untitled pattern",
       canvas: createCanvas(overrides.canvas),
       repeatUnit: createRepeatUnit(overrides.repeatUnit),
@@ -5725,8 +5729,9 @@ output {
       if (applied) engine2.normalizeRepeatSize();
       engine2.markDirty();
       const seam = applied ? engine2.checkSeamless() : { ok: false, percent: 0, reasons: [note || "\u9069\u7528\u3067\u304D\u307E\u305B\u3093"] };
+      if (applied && !seam.ok) note = `${note}\uFF0F\u691C\u67FB ${seam.percent}%\uFF08\u4E0D\u5408\u683C\uFF09`;
       let naturalness = null;
-      let scoreValue = seam.ok ? 100 : (seam.percent ?? 0) * 0.5;
+      let scoreValue = seam.ok ? 100 : -1e3 + (seam.percent ?? 0);
       if (applied) {
         const unit = engine2.renderUnit({ scale: Math.min(1, 700 / engine2.recipe.repeatUnit.width), useCache: false });
         const band = measureIntroducedBanding(source, unit);
@@ -6837,12 +6842,159 @@ output {
         if (!r.applied) return r;
         const report = engine2.evaluate();
         const seam = engine2.checkSeamless();
-        const score = seam.ok ? report.score : report.score * 0.5;
+        const score = seam.ok ? report.score : -1e3 + report.score;
         if (!best || score > best.score) best = { score, snapshot: engine2.snapshot(), result: r, report, seam };
-        if (best.score >= target) break;
+        if (seam.ok && report.score >= target) break;
       }
       if (best) engine2.setRecipe(best.snapshot);
-      return { ...best.result, score: best.score, seamless: best.seam.percent };
+      if (!best.seam.ok) {
+        return { applied: false, reason: `\u7D44\u307F\u7ACB\u3066\u3067\u306F\u7E4B\u304C\u308A\u307E\u305B\u3093\u3067\u3057\u305F\uFF08\u6700\u826F ${best.seam.percent}%\uFF09`, seamless: best.seam.percent };
+      }
+      return { ...best.result, score: best.report.score, seamless: best.seam.percent };
+    }
+  };
+
+  // src/core/pattern/PatternMixer.js
+  init_SeededRandom();
+  var PatternMixer = class {
+    constructor(engine2) {
+      this.engine = engine2;
+    }
+    /**
+     * @param {HTMLCanvasElement} groundImage 地にする絵（A）
+     * @param {HTMLCanvasElement} motifImage 柄にする絵（B）
+     * @param {{seed?:number, density?:number, motifScale?:number, maxMotifs?:number}} options
+     *   density    … 1リピートに置く物の量（0.2〜1.0）
+     *   motifScale … 物の大きさ（1 = 取り出したまま）
+     */
+    mix(groundImage, motifImage, { seed = null, density = 0.5, motifScale = 1, maxMotifs = 24 } = {}) {
+      const engine2 = this.engine;
+      const rng = new SeededRandom(seed ?? engine2.recipe.randomization.seed);
+      const ground = toCanvas(groundImage);
+      const motifSource = toCanvas(motifImage);
+      let whole = [];
+      let usedTolerance = null;
+      for (const tolerance of [null, 16, 24, 34, 48, 64]) {
+        const found = MotifExtractor.extract(motifSource, {
+          maxMotifs: 80,
+          minAreaRatio: 8e-4,
+          ...tolerance == null ? {} : { tolerance }
+        });
+        const ok = found.filter((f) => !f.touchesEdge && f.areaRatio < 0.25);
+        if (ok.length > whole.length) {
+          whole = ok;
+          usedTolerance = tolerance;
+        }
+        if (whole.length >= 6) break;
+      }
+      if (whole.length < 1) {
+        return { applied: false, reason: "\u67C4\u306E\u7D75\u304B\u3089\u4E38\u3054\u3068\u306E\u7269\u3092\u53D6\u308A\u51FA\u305B\u307E\u305B\u3093\uFF08\u5730\u3068\u67C4\u306E\u5DEE\u304C\u5C0F\u3055\u3044\u7D75\u3067\u3059\uFF09" };
+      }
+      const items = whole.sort((a, b) => b.areaRatio - a.areaRatio).slice(0, maxMotifs);
+      let tile = ground;
+      let groundMethod = "as-is";
+      const precise = measureSeamPrecision(ground);
+      const visible = measureSeamVisibility(ground);
+      if (!(precise.horizontal.pass && precise.vertical.pass) || visible.visibleV || visible.visibleH) {
+        let best = null;
+        const widths = [0.15, 0.2, 0.26, 0.34, 0.42];
+        for (const ox of widths) {
+          for (const oy of widths) {
+            const t = makeTileableByCut(ground, { overlapX: ox, overlapY: oy });
+            const m = measureSeamPrecision(t);
+            const v = measureSeamVisibility(t);
+            const over = Math.max(0, v.seamV - v.interiorMaxV) + Math.max(0, v.seamH - v.interiorMaxH);
+            const score = m.horizontal.seamDiff + m.vertical.seamDiff + over * 2e3 + (ox + oy) * 12;
+            if (!best || score < best.score) best = { score, canvas: t };
+          }
+        }
+        tile = best.canvas;
+        groundMethod = "cut";
+      }
+      const unit = engine2.recipe.repeatUnit;
+      unit.width = tile.width;
+      unit.height = tile.height;
+      const entry = engine2.imageStore.add(tile, { name: "\u5730\uFF08A\uFF09" });
+      engine2.recipe.background = {
+        ...engine2.recipe.background,
+        type: "image",
+        imageId: entry.id,
+        imageFit: "stretch",
+        palette: null
+      };
+      engine2.recipe.seamlessSettings = {
+        ...engine2.recipe.seamlessSettings,
+        wrapAround: true,
+        edgeMode: "none",
+        blendEdges: false
+      };
+      engine2.recipe.constraints.allOverOnly = true;
+      engine2.recipe.repeatStrategy = "all-over";
+      engine2.recipe.motifs = [];
+      engine2.recipe.placements = [];
+      engine2.normalizeRepeatSize();
+      const maxSide = Math.sqrt(unit.width * unit.height * 0.12);
+      for (const [i, item] of items.entries()) {
+        const natural = Math.max(item.canvas.width, item.canvas.height);
+        const fit = Math.min(1, maxSide / natural) * motifScale;
+        const image = engine2.imageStore.add(item.canvas, { name: `\u67C4\uFF08B\uFF09 ${i + 1}` });
+        engine2.recipe.motifs.push(
+          createMotif({
+            name: `\u67C4 ${i + 1}`,
+            sourceImage: image.id,
+            width: item.canvas.width * fit,
+            height: item.canvas.height * fit,
+            scale: 1,
+            weight: 10
+          })
+        );
+      }
+      Object.assign(engine2.recipe.generator, {
+        density: Math.max(0.15, Math.min(1, density)),
+        rotationVariation: 14,
+        randomRotation: 0,
+        scaleVariation: 0.14,
+        scale: 1
+      });
+      engine2.recipe.collision = { ...engine2.recipe.collision ?? {}, enabled: true, mode: "avoid", padding: 10 };
+      engine2.generate({ seed: rng.int(1, 2 ** 31 - 1) });
+      engine2.ensureTileSelfContained();
+      engine2.separateOverlaps();
+      engine2.fillGaps({ target: 96 });
+      engine2.separateOverlaps();
+      engine2.markDirty();
+      return {
+        applied: true,
+        groundMethod,
+        motifs: engine2.recipe.motifs.length,
+        placements: engine2.recipe.placements.length,
+        unit: { width: unit.width, height: unit.height },
+        note: `\u5730\u306F A\uFF08${groundMethod === "as-is" ? "\u305D\u306E\u307E\u307E\u7E4B\u304C\u308B" : "\u5207\u308A\u8CBC\u308A\u3067\u7E4B\u3044\u3060"}\uFF09\uFF0F\u67C4\u306F B \u304B\u3089\u4E38\u3054\u3068\u306E\u7269 ${items.length} \u7A2E\u3092\u53D6\u308A\u51FA\u3057\u3066 ${engine2.recipe.placements.length} \u70B9\u914D\u7F6E` + (usedTolerance == null ? "" : `\uFF08\u629C\u304D\u8A31\u5BB9 ${usedTolerance}\uFF09`)
+      };
+    }
+    /** 何通りか試して、いちばん点数の高いものを採る */
+    mixBest(groundImage, motifImage, { seed = null, target = 97 } = {}) {
+      const engine2 = this.engine;
+      const variants = [
+        { density: 0.45, motifScale: 1 },
+        { density: 0.6, motifScale: 0.85 },
+        { density: 0.35, motifScale: 1.15 },
+        { density: 0.75, motifScale: 0.7 },
+        { density: 0.5, motifScale: 1.3 }
+      ];
+      let best = null;
+      for (const [i, v] of variants.entries()) {
+        const r = this.mix(groundImage, motifImage, { ...v, seed: (seed ?? engine2.recipe.randomization.seed) + i * 7919 });
+        if (!r.applied) return r;
+        const seam = engine2.checkSeamless();
+        const report = engine2.evaluate();
+        const score = seam.ok ? report.score : -1e3 + report.score;
+        if (!best || score > best.score) best = { score, snapshot: engine2.snapshot(), result: r, seam, report };
+        if (seam.ok && report.score >= target) break;
+      }
+      if (best) engine2.setRecipe(best.snapshot);
+      if (!best.seam.ok) return { applied: false, reason: `\u5408\u308F\u305B\u3066\u3082\u7E4B\u304C\u308A\u307E\u305B\u3093\u3067\u3057\u305F\uFF08\u6700\u826F ${best.seam.percent}%\uFF09` };
+      return { ...best.result, score: best.report.score, seamless: best.seam.percent };
     }
   };
 
@@ -7405,6 +7557,7 @@ output {
       this.planner = new CandidatePlanner(this);
       this.layered = new LayeredRebuilder(this);
       this.composer = new AllOverComposer(this);
+      this.mixer = new PatternMixer(this);
       this.version = 0;
       this._unitCache = null;
       this._listeners = /* @__PURE__ */ new Set();
@@ -7606,8 +7759,10 @@ output {
           const seam = measureSeamPrecision(probe);
           const vis = measureSeamVisibility(probe);
           const ink = probe._cutInk ?? 0;
-          const scoreX = -seam.horizontal.seamDiff - ink * 6 - Math.max(0, vis.seamV - vis.interiorMaxV) * 200;
-          const scoreY = -seam.vertical.seamDiff - ink * 6 - Math.max(0, vis.seamH - vis.interiorMaxH) * 200;
+          const overV = Math.max(0, vis.seamV - vis.interiorMaxV);
+          const overH = Math.max(0, vis.seamH - vis.interiorMaxH);
+          const scoreX = -seam.horizontal.seamDiff - ink * 6 - overV * 2e3;
+          const scoreY = -seam.vertical.seamDiff - ink * 6 - overH * 2e3;
           if (scoreX > bestX.value) bestX = { value: scoreX, width: value };
           if (scoreY > bestY.value) bestY = { value: scoreY, width: value };
         }
@@ -8082,6 +8237,12 @@ output {
       this.markDirty();
       return { applied: true, motifId: motif.id, size: { width: cut.canvas.width, height: cut.canvas.height } };
     }
+    /** 2枚を合わせる：地は A、柄は B */
+    mixTwoImages(groundImage, motifImage, options = {}) {
+      const result = this.mixer.mixBest(groundImage, motifImage, options);
+      this.markDirty();
+      return result;
+    }
     /** 総柄でない絵（1点もの・余白のある絵・パネル）から総柄を組み立てる */
     composeAllOver(canvas, options = {}) {
       const result = this.composer.composeBest(canvas, options);
@@ -8274,6 +8435,29 @@ output {
       this.generator.applyPreset(this.recipe, preset);
       this.markDirty();
       return this.recipe;
+    }
+    /**
+     * 「タイル1枚で完結しているか」を保証する。
+     *
+     * 端をまたぐモチーフは Wrap Around で反対側に複製するが、この複製は
+     * **隣のタイルが真横にある**前提で作られる。ハーフドロップのように隣が半段ずれる方式だと、
+     * 複製の位置が合わず、並べたときにモチーフが切れる（実際に 1 点もの柄で起きた）。
+     *
+     * 送りのずれは「書き出し単位が単位より大きいか」で判定できる。
+     * 配置のある柄でずれる方式が選ばれていたら、ストレートに直す。
+     * 散らしの変化は配置側のばらつきで足りるので、見た目は損なわれない。
+     */
+    ensureTileSelfContained() {
+      if (!this.recipe.placements.length) return { changed: false };
+      if (this.recipe.seamlessSettings.wrapAround === false) return { changed: false };
+      const baked = this.repeat.bake(this.recipe);
+      const unit = this.recipe.repeatUnit;
+      const offsetLattice = baked.width !== unit.width || baked.height !== unit.height;
+      if (!offsetLattice) return { changed: false };
+      const before = this.recipe.repeatStrategy;
+      this.recipe.repeatStrategy = this.recipe.constraints.allOverOnly ? "all-over" : "straight";
+      this.markDirty();
+      return { changed: true, from: before, to: this.recipe.repeatStrategy };
     }
     /** Wrap Clone を含む描画用 placements */
     expandedPlacements({ margin = 0 } = {}) {
@@ -8930,8 +9114,10 @@ output {
           if (seam.ok) return `\u305D\u306E\u307E\u307E\u7E4B\u304C\u308B\uFF08${seam.percent}%\uFF09`;
           const notAllOver = [INPUT_TYPES.SINGLE_MOTIF, INPUT_TYPES.MULTI_MOTIF].includes(analysis.inputType);
           if (notAllOver && canvas) {
+            const before = engine2.snapshot();
             const composed = engine2.composeAllOver(canvas, { seed: engine2.recipe.randomization.seed });
             seam = engine2.checkSeamless();
+            if (!composed.applied || !seam.ok) engine2.setRecipe(before);
             if (composed.applied && seam.ok) {
               engine2.recipe.meta.seamMethod = "compose";
               return `\u7DCF\u67C4\u306B\u7D44\u307F\u7ACB\u3066\u305F\uFF08${composed.note}\uFF09\uFF0F\u30B9\u30B3\u30A2 ${composed.score}`;
@@ -8968,12 +9154,23 @@ output {
           });
         }
       }
+      const selfContained = engine2.ensureTileSelfContained();
+      if (selfContained.changed) {
+        await step(
+          "lattice",
+          "\u30BF\u30A4\u30EB1\u679A\u3067\u5B8C\u7D50\u3055\u305B\u308B",
+          () => `${selfContained.from} \u306F\u96A3\u304C\u534A\u6BB5\u305A\u308C\u308B\u305F\u3081 ${selfContained.to} \u306B\u5909\u66F4\uFF08\u7AEF\u3092\u307E\u305F\u3050\u30E2\u30C1\u30FC\u30D5\u304C\u5207\u308C\u306A\u3044\u3088\u3046\u306B\uFF09`
+        );
+      }
       if (engine2.recipe.placements.length) {
         await step("optimize", "\u914D\u7F6E\u3092\u8A70\u3081\u308B\uFF08100%\u3092\u76EE\u6307\u3059\uFF09", () => {
           const before = engine2.evaluate().score;
           const r = engine2.optimizeLayout({ target: 100, tries: 14 });
           return `${before} \u2192 ${r.score}${r.fixed ? "\uFF08\u4F4D\u7F6E\u306F\u4FDD\u3061\u3001\u91CD\u306A\u308A\u3060\u3051\u89E3\u6D88\uFF09" : `\uFF08${r.tries} \u56DE\u4F5C\u308A\u76F4\u3057\uFF09`}`;
         });
+      }
+      if (!engine2.recipe.meta.seamMethod) {
+        engine2.recipe.meta.seamMethod = engine2.recipe.placements.length ? engine2.recipe.motifs.length > 0 && engine2.recipe.background.type === "color" ? "compose" : "motif" : "as-is";
       }
       let report = await step("quality", "\u54C1\u8CEA\u3092\u691C\u67FB", () => {
         const r = engine2.evaluate();
@@ -9461,6 +9658,27 @@ ${xrefPos}
   }
 
   // src/export/PatternExporter.js
+  var COUNTER_KEY = "rekuredool-pattern-design:export-counter";
+  function readCounters() {
+    try {
+      return JSON.parse(localStorage.getItem(COUNTER_KEY) ?? "{}");
+    } catch {
+      return {};
+    }
+  }
+  function nextExportNumber(recipeId = "default") {
+    const counters = readCounters();
+    const next = (counters[recipeId] ?? 0) + 1;
+    counters[recipeId] = next;
+    try {
+      localStorage.setItem(COUNTER_KEY, JSON.stringify(counters));
+    } catch {
+    }
+    return next;
+  }
+  function peekExportNumber(recipeId = "default") {
+    return (readCounters()[recipeId] ?? 0) + 1;
+  }
   var PatternExporter = class {
     constructor(engine2) {
       this.engine = engine2;
@@ -9494,6 +9712,8 @@ ${xrefPos}
         seamless: result.seamless,
         note: result.seamless ? "\u3053\u306E\u307E\u307E\u7E26\u6A2A\u306B\u4E26\u3079\u3066\u7E70\u308A\u8FD4\u305B\u307E\u3059" : "\u3053\u306E\u65B9\u5F0F\u306F\u5358\u4F4D\u3068\u3057\u3066\u7E70\u308A\u8FD4\u305B\u307E\u305B\u3093\uFF08\u7F6E\u304D\u67C4\u30FB\u30D1\u30CD\u30EB\u67C4\uFF09",
         resolutionNote: upscaling ? `\u5143\u753B\u50CF\u306F ${useWidthCm}cm \u3067\u5B9F\u52B9 ${sourceDpi}dpi\u3002Lanczos-3 \u3067 ${nativeWidth}px \u2192 ${wanted}px\uFF08${useDpi}dpi\uFF09\u306B\u62E1\u5927\u3057\u8F2A\u90ED\u3092\u5F15\u304D\u7DE0\u3081\u307E\u3057\u305F\u3002\u3088\u308A\u9BAE\u660E\u306B\u3059\u308B\u306B\u306F\u6A2A ${wanted}px \u4EE5\u4E0A\u306E\u5143\u753B\u50CF\u304C\u5FC5\u8981\u3067\u3059` : null,
+        serial: null,
+        // 実際に保存するときに付ける
         filename: `${slug(recipe2.name)}_${strategy.id}_${useDpi}dpi.png`
       };
     }
@@ -9532,7 +9752,8 @@ ${xrefPos}
         canvas = out;
       }
       const heightCm = canvas.height / useDpi * 2.54;
-      const fileBase = name ?? `${slug(this.engine.recipe.name)}_${Math.round(useWidthCm)}cm_${useDpi}dpi${colorSpace === "cmyk" ? "_CMYK" : ""}${bleedCm ? `_bleed${bleedCm}cm` : ""}`;
+      const serial = String(nextExportNumber(this.engine.recipe.id)).padStart(3, "0");
+      const fileBase = name ?? `${slug(this.engine.recipe.name)}_${serial}_${Math.round(useWidthCm)}cm_${useDpi}dpi${colorSpace === "cmyk" ? "_CMYK" : ""}${bleedCm ? `_bleed${bleedCm}cm` : ""}`;
       const imageData = ctx2d(canvas).getImageData(0, 0, canvas.width, canvas.height);
       if (format === "pdf") {
         const blob = await canvasToBlob(canvas, "image/jpeg", 0.95);
@@ -9577,6 +9798,7 @@ ${xrefPos}
     }
     /** 印刷用シート（生地幅×長さ）を TIFF/JPEG で書き出す */
     async exportPrintSheet({ widthCm, heightCm, dpi = 150, format = "tiff", name = "print-sheet" } = {}) {
+      name = this.withSerial(name);
       const sheet = this.engine.renderPrintSheet({ widthCm, heightCm, dpi, upscale: "lanczos" });
       const canvas = sheet.canvas;
       if (format === "jpeg") {
@@ -9627,7 +9849,18 @@ ${xrefPos}
      * format: 'png' | 'tiff'（LZW）| 'tiff-packbits' | 'tiff-none'
      * どの形式でも解像度（DPI）を埋め込む。入稿先で 72dpi と誤解されないため。
      */
+    /**
+     * 通し番号つきのファイル名にする。
+     * 既に番号が入っている名前には足さない。
+     */
+    withSerial(filename) {
+      if (/_\d{3}(_|\.)/.test(filename)) return filename;
+      const serial = String(nextExportNumber(this.engine.recipe.id)).padStart(3, "0");
+      const dot = filename.lastIndexOf(".");
+      return dot < 0 ? `${filename}_${serial}` : `${filename.slice(0, dot)}_${serial}${filename.slice(dot)}`;
+    }
     async download(canvas, filename, { format = "png", dpi = null, alpha = false } = {}) {
+      filename = this.withSerial(filename);
       const useDpi = dpi ?? this.engine.recipe.canvas.dpi;
       const name = filename.replace(/\.(png|tif|tiff)$/i, "");
       if (format.startsWith("tiff")) {
@@ -9646,6 +9879,7 @@ ${xrefPos}
       return triggerDownload(new Blob([withDpi], { type: "image/png" }), `${name}.png`);
     }
     downloadText(text, filename, type = "application/json") {
+      filename = this.withSerial(filename);
       return triggerDownload(new Blob([text], { type }), filename);
     }
   };
@@ -11274,7 +11508,8 @@ ${xrefPos}
       light ? { maxSide: 1600, quality: 0.75, lossless } : { lossless }
     );
     const json = JSON.stringify(project);
-    const name = `${(engine.recipe.name || "pattern").replace(/[^\w\-一-龯ぁ-んァ-ヶ]+/g, "-")}${light ? "-light" : ""}${lossless ? "-lossless" : ""}.pattern.json`;
+    const serial = String(nextExportNumber(engine.recipe.id)).padStart(3, "0");
+    const name = `${(engine.recipe.name || "pattern").replace(/[^\w\-一-龯ぁ-んァ-ヶ]+/g, "-")}_${serial}${light ? "-light" : ""}${lossless ? "-lossless" : ""}.pattern.json`;
     exporter.downloadText(json, name);
     const size = json.length < 1024 * 1024 ? `${Math.round(json.length / 1024)}KB` : `${(json.length / 1024 / 1024).toFixed(1)}MB`;
     toast(`${name}\uFF08${size}\uFF0F\u753B\u50CF ${Object.keys(project.images).length} \u70B9\uFF09`, 4e3);
@@ -12190,6 +12425,8 @@ ${xrefPos}
     const px = Math.round(cmToPx(r.canvas.physicalWidthCm, r.canvas.dpi) * unitsAcross);
     const pyTotal = Math.round(cmToPx(r.canvas.physicalHeightCm, r.canvas.dpi) * unitsDown);
     $("exportPx").textContent = `${px}\xD7${pyTotal}px`;
+    const nextNo = String(peekExportNumber(engine.recipe.id)).padStart(3, "0");
+    $("printNote").textContent = `\u6B21\u306E\u4FDD\u5B58\u306F No.${nextNo} \u306B\u306A\u308A\u307E\u3059\u3002CMYK \u306F ICC \u30D7\u30ED\u30D5\u30A1\u30A4\u30EB\u3092\u57CB\u3081\u306A\u3044\u7D20\u306E\u5206\u7248\u3067\u3059\u3002\u696D\u8005\u306E\u6307\u5B9A\uFF08Japan Color \u306A\u3069\uFF09\u304C\u3042\u308B\u5834\u5408\u306F\u3001RGB \u3067\u6E21\u3057\u3066\u5148\u65B9\u3067\u5909\u63DB\u3057\u3066\u3082\u3089\u3046\u307B\u3046\u304C\u6B63\u78BA\u3067\u3059\u3002`;
     $("exportNote").textContent = baked.seamless ? `\u66F8\u304D\u51FA\u3057\u5358\u4F4D\u306F ${unitsAcross}\xD7${unitsDown} \u30BF\u30A4\u30EB\u5206\u3002\u4E26\u3079\u308B\u3060\u3051\u3067\u7E70\u308A\u8FD4\u305B\u307E\u3059\u3002` : "\u3053\u306E\u65B9\u5F0F\u306F\u7E70\u308A\u8FD4\u3057\u5358\u4F4D\u306B\u306A\u308A\u307E\u305B\u3093\uFF08\u7F6E\u304D\u67C4\u30FB\u30D1\u30CD\u30EB\u30FB\u653E\u5C04\uFF09\u3002\u30C7\u30B6\u30A4\u30F3\u9762\u3068\u3057\u3066\u305D\u306E\u307E\u307E\u66F8\u304D\u51FA\u3057\u307E\u3059\u3002";
     const eff = engine.effectiveResolution();
     const resNote = $("resolutionNote");
@@ -12558,6 +12795,36 @@ ${xrefPos}
           btn.disabled = false;
         }
       }, 30);
+    });
+    $("mixInput").addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file) return;
+      const groundSource = lastSourceCanvas ?? imageStore.getCanvas(engine.recipe.meta.original?.imageId ?? engine.recipe.background.imageId);
+      if (!groundSource) {
+        toast("\u5148\u306B\u300C\u5730\u300D\u306B\u3059\u308B\u753B\u50CF\u3092\u8AAD\u307F\u8FBC\u3093\u3067\u304F\u3060\u3055\u3044");
+        return;
+      }
+      let motifCanvas;
+      try {
+        motifCanvas = toCanvas(await loadImageFromFile(file));
+      } catch (err) {
+        toast(err.message, 6e3);
+        return;
+      }
+      engine.pushHistory("2\u679A\u3092\u5408\u308F\u305B\u308B");
+      toast("2\u679A\u3092\u5408\u308F\u305B\u3066\u3044\u307E\u3059\u2026", 6e4);
+      await new Promise((r) => setTimeout(r, 30));
+      const result = engine.mixTwoImages(groundSource, motifCanvas, { seed: engine.recipe.randomization.seed });
+      if (!result.applied) {
+        toast(result.reason, 6e3);
+        return;
+      }
+      buildStrategySelect();
+      refreshAll();
+      renderQuality(engine.evaluate());
+      renderSeamless(engine.checkSeamless());
+      toast(`${result.note}\uFF0F\u30B7\u30FC\u30E0\u30EC\u30B9 ${result.seamless}%\u30FB\u30B9\u30B3\u30A2 ${result.score}`, 7e3);
     });
     $("garmentInput").addEventListener("change", async (e) => {
       const files = [...e.target.files ?? []];
