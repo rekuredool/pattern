@@ -10584,7 +10584,7 @@ ${xrefPos}
   }
   function saveRelaySettings(settings) {
     try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(settings));
+      localStorage.setItem(STORE_KEY, JSON.stringify({ ...settings, passcode: normalizePasscode(settings.passcode) }));
     } catch {
     }
   }
@@ -10594,12 +10594,19 @@ ${xrefPos}
     } catch {
     }
   }
-  async function call(url, passcode, init = {}) {
+  function normalizePasscode(passcode) {
+    return String(passcode ?? "").normalize("NFKC").trim();
+  }
+  async function call(url, passcode, init = {}, stage = "") {
+    const pass = normalizePasscode(passcode);
+    if (!/^[\x20-\x7e]+$/.test(pass)) {
+      throw new Error("\u5408\u8A00\u8449\u306F\u534A\u89D2\u306E\u82F1\u6570\u5B57\u3067\u5165\u308C\u3066\u304F\u3060\u3055\u3044\uFF08\u5168\u89D2\u3084\u65E5\u672C\u8A9E\u306F\u9001\u308C\u307E\u305B\u3093\uFF09");
+    }
     let r;
     try {
-      r = await fetch(url, { ...init, headers: { ...init.headers || {}, "X-Passcode": passcode } });
+      r = await fetch(url, { ...init, headers: { ...init.headers || {}, "X-Passcode": pass } });
     } catch (e) {
-      const err = new Error("\u4E2D\u7D99\u5F79\u306B\u3064\u306A\u304C\u308A\u307E\u305B\u3093\uFF08\u4E2D\u7D99\u5F79\u306E\u30D7\u30ED\u30B0\u30E9\u30E0\u304C\u53E4\u3044\u304B\u3001\u6B62\u307E\u3063\u3066\u3044\u308B\u53EF\u80FD\u6027\u304C\u3042\u308A\u307E\u3059\uFF09");
+      const err = new Error(`\u4E2D\u7D99\u5F79\u306B\u3064\u306A\u304C\u308A\u307E\u305B\u3093\u3010${stage}\u3011\uFF08\u30D6\u30E9\u30A6\u30B6\u306E\u8868\u793A\uFF1A${e && e.message ? e.message : e}\uFF09`);
       err.cause = e;
       throw err;
     }
@@ -10615,6 +10622,21 @@ ${xrefPos}
   } }) {
     const base = relayUrl.replace(/\/+$/, "");
     return async (pngCanvas) => {
+      if (!/^[\x20-\x7e]+$/.test(normalizePasscode(passcode))) {
+        const err = new Error("\u5408\u8A00\u8449\u306F\u534A\u89D2\u306E\u82F1\u6570\u5B57\u3067\u5165\u308C\u3066\u304F\u3060\u3055\u3044\uFF08\u5168\u89D2\u3084\u65E5\u672C\u8A9E\u306F\u9001\u308C\u307E\u305B\u3093\uFF09");
+        err.status = 401;
+        throw err;
+      }
+      const ping = await fetch(`${base}/result?url=${encodeURIComponent("https://invalid.example")}`, {
+        headers: { "X-Passcode": normalizePasscode(passcode) }
+      }).catch((e) => {
+        throw new Error(`\u4E2D\u7D99\u5F79\u306B\u3064\u306A\u304C\u308A\u307E\u305B\u3093\u3010\u78BA\u8A8D\u306E\u6BB5\u968E\u3011\uFF08\u30D6\u30E9\u30A6\u30B6\u306E\u8868\u793A\uFF1A${e && e.message ? e.message : e}\uFF09\u3002\u4E2D\u7D99\u5F79\u306E URL \u304C\u6B63\u3057\u3044\u304B\u3001Cloudflare \u3067 Deploy \u3055\u308C\u3066\u3044\u308B\u304B\u3092\u78BA\u304B\u3081\u3066\u304F\u3060\u3055\u3044`);
+      });
+      if (ping.status === 401) {
+        const err = new Error("\u5408\u8A00\u8449\u304C\u9055\u3044\u307E\u3059");
+        err.status = 401;
+        throw err;
+      }
       const image = pngCanvas.toDataURL("image/png").split(",")[1];
       const request = {
         prompt: "seamless continuation of the surrounding pattern, identical style, identical density",
@@ -10624,15 +10646,16 @@ ${xrefPos}
         output_format: "png",
         safety_tolerance: 2
       };
-      const job = await (await call(`${base}/submit`, passcode, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(request)
-      })).json();
+      const job = await (await call(
+        `${base}/submit`,
+        passcode,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(request) },
+        `\u753B\u50CF\u3092\u9001\u308B\u6BB5\u968E\u30FB${Math.round(image.length / 1024 / 1024 * 10) / 10}MB`
+      )).json();
       if (!job.polling_url) throw new Error("\u63CF\u304D\u76F4\u3057\u306E\u53D7\u4ED8\u756A\u53F7\u304C\u8FD4\u3063\u3066\u304D\u307E\u305B\u3093\u3067\u3057\u305F");
       for (let i = 0; i < 180; i++) {
         await new Promise((res) => setTimeout(res, 2e3));
-        const r = await call(`${base}/result?url=${encodeURIComponent(job.polling_url)}`, passcode);
+        const r = await call(`${base}/result?url=${encodeURIComponent(job.polling_url)}`, passcode, {}, "\u7D50\u679C\u3092\u53D7\u3051\u53D6\u308B\u6BB5\u968E");
         onWait(i);
         const type = r.headers.get("Content-Type") || "";
         if (type.startsWith("image/")) {
@@ -13583,9 +13606,9 @@ ${xrefPos}
       } catch (e) {
         if (e.status === 401) {
           clearRelaySettings();
-          toast("\u5408\u8A00\u8449\u304C\u9055\u3044\u307E\u3059\u3002\u3082\u3046\u4E00\u5EA6\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u5165\u529B\u3057\u76F4\u3057\u3066\u304F\u3060\u3055\u3044", 7e3);
+          toast(`${e.message}\u3002\u3082\u3046\u4E00\u5EA6\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u5165\u529B\u3057\u76F4\u3057\u3066\u304F\u3060\u3055\u3044`, 8e3);
         } else {
-          toast(`\u63CF\u304D\u76F4\u3057\u306B\u5931\u6557\u3057\u307E\u3057\u305F\uFF1A${e.message}`, 7e3);
+          toast(`\u63CF\u304D\u76F4\u3057\u306B\u5931\u6557\u3057\u307E\u3057\u305F\uFF1A${e.message}`, 15e3);
         }
       } finally {
         busy.done();
