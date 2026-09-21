@@ -1598,7 +1598,7 @@ output {
             <input id="fileInput" type="file" accept="image/*,.heic,.heif" multiple hidden />
           </label>
           <button class="btn btn--primary" id="autoBtn" title="設定を変えてもう一度自動生成する">AUTO PATTERN</button>
-          <button class="btn btn--ai" id="aiFillBtn" title="継ぎ目をAIで描き直して、完全なシームレスにします（社内用・合言葉が必要）">AIで継ぎ目を描き直す</button>
+          <button class="btn btn--ai" id="aiFillBtn" title="継ぎ目を描き直して、完全なシームレスにします（社内用・合言葉が必要）">継ぎ目を描き直す</button>
           <button class="btn btn--change" id="changeBtn" title="別の案を試す（シームレスの4条件を通った案だけを順に表示）">
             CHANGE PATTERN
           </button>
@@ -1707,8 +1707,8 @@ output {
           </section>
 
           <section class="panel">
-            <h2 class="panel__title">AI 補助</h2>
-            <label class="check"><input type="checkbox" id="aiToggle" /> 解析とモチーフ分類に AI を使う</label>
+            <h2 class="panel__title">解析の補助</h2>
+            <label class="check"><input type="checkbox" id="aiToggle" /> 解析とモチーフ分類に補助判定を使う</label>
             <p class="hint" id="aiStatus">経路を確認しています…</p>
             <button class="btn btn--tiny" id="classifyBtn">モチーフを分類する</button>
             <p class="hint">オフでも全機能が動きます。切り出しの形は常にローカル処理の結果を使います。</p>
@@ -1952,7 +1952,7 @@ output {
     <div class="busy" id="busyOverlay" hidden>
       <div class="busy__box" role="status" aria-live="polite">
         <div class="busy__spinner" aria-hidden="true"></div>
-        <div class="busy__title">AIで継ぎ目を描き直しています</div>
+        <div class="busy__title">継ぎ目を描き直しています</div>
         <div class="busy__step" id="busyStep">準備しています…</div>
         <div class="busy__bar"><span id="busyBar"></span></div>
         <div class="busy__time" id="busyTime">0秒</div>
@@ -1963,7 +1963,7 @@ output {
     <!-- AIで継ぎ目を描き直す：中継役の設定（ブラウザの小窓が使えない画面でも出せるよう、ページ内に置く） -->
     <div class="relay" id="relayDialog" hidden>
       <div class="relay__box" role="dialog" aria-labelledby="relayTitle">
-        <h2 id="relayTitle">AIで継ぎ目を描き直す</h2>
+        <h2 id="relayTitle">継ぎ目を描き直す</h2>
         <p class="hint">このパソコンで初めて使うときだけ、合言葉を入れてください。次からは聞かれません。</p>
         <input id="relayUrl" type="hidden" />
         <label class="field"><span>合言葉</span><input class="input" id="relayPass" type="password" autocomplete="current-password" /></label>
@@ -8043,7 +8043,7 @@ output {
       const mask = seamMask(current, axis);
       let best = null;
       for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
-        onProgress(`${index + 1}/2 ${name}\u3092AI\u304C\u63CF\u3044\u3066\u3044\u307E\u3059${attempt > 1 ? `\uFF08\u3084\u308A\u76F4\u3057 ${attempt - 1}\u56DE\u76EE\uFF09` : ""}\u2026`, base + 10, { waiting: true, until: base + 42 });
+        onProgress(`${index + 1}/2 ${name}\u3092\u63CF\u3044\u3066\u3044\u307E\u3059${attempt > 1 ? `\uFF08\u3084\u308A\u76F4\u3057 ${attempt - 1}\u56DE\u76EE\uFF09` : ""}\u2026`, base + 10, { waiting: true, until: base + 42 });
         await breathe();
         const resultCanvas = await inpaint(maskedPng(current, mask));
         onProgress(`${index + 1}/2 ${name}\u306E\u4ED5\u4E0A\u304C\u308A\u3092\u78BA\u304B\u3081\u3066\u3044\u307E\u3059\u2026`, base + 45);
@@ -8863,7 +8863,7 @@ output {
       const source = originalId ? this.imageStore.getCanvas(originalId) : null;
       if (!source) return { applied: false, reason: "\u5148\u306B\u67C4\u306E\u753B\u50CF\u3092\u8AAD\u307F\u8FBC\u3093\u3067\u304F\u3060\u3055\u3044" };
       const result = await repairSeams(source, inpaint, onProgress);
-      const entry = this.imageStore.add(result.canvas, { name: "\u5165\u7A3F\u753B\u50CF\uFF08AI\u3067\u7D99\u304E\u76EE\u3092\u63CF\u304D\u76F4\u3057\uFF09" });
+      const entry = this.imageStore.add(result.canvas, { name: "\u5165\u7A3F\u753B\u50CF\uFF08\u7D99\u304E\u76EE\u3092\u63CF\u304D\u76F4\u3057\uFF09" });
       const unit = this.recipe.repeatUnit;
       unit.width = result.canvas.width;
       unit.height = result.canvas.height;
@@ -9328,7 +9328,7 @@ output {
       this.lastError = null;
       this.label = "\u306A\u3057\uFF08\u30ED\u30FC\u30AB\u30EB\u51E6\u7406\u306E\u307F\uFF09";
     }
-    configure({ request, label: label3 = "\u30AB\u30B9\u30BF\u30E0 AI" }) {
+    configure({ request, label: label3 = "\u30AB\u30B9\u30BF\u30E0\u88DC\u52A9" }) {
       this.transport = typeof request === "function" ? request : null;
       this.label = this.transport ? label3 : "\u306A\u3057\uFF08\u30ED\u30FC\u30AB\u30EB\u51E6\u7406\u306E\u307F\uFF09";
       return this;
@@ -11995,14 +11995,14 @@ ${xrefPos}
     /** AIProvider.configure({ request }) に渡す関数 */
     createRequest() {
       return async (payload) => {
-        if (!this.available) throw unsupported("AI \u7D4C\u8DEF\u304C\u672A\u691C\u51FA");
+        if (!this.available) throw unsupported("\u88DC\u52A9\u5224\u5B9A\u306E\u7D4C\u8DEF\u304C\u672A\u691C\u51FA");
         switch (payload?.task) {
           case "analyze-pattern-input":
             return this.#analyze(payload);
           case "detect-motifs":
             return this.#classify(payload);
           default:
-            throw unsupported(`task ${payload?.task} \u306F AI \u3067\u306F\u6271\u308F\u306A\u3044`);
+            throw unsupported(`task ${payload?.task} \u306F\u88DC\u52A9\u5224\u5B9A\u3067\u306F\u6271\u308F\u306A\u3044`);
         }
       };
     }
@@ -12771,7 +12771,7 @@ ${xrefPos}
       ["\u30A4\u30F3\u30AF\u91CF", `${Math.round((m.coverage ?? 0) * 100)}%`],
       ["\u7AEF\u306E\u9023\u7D9A\u6027", `${Math.round((m.edgeContinuity ?? 0) * 100)}`],
       ["\u63A8\u5968\u30EA\u30D4\u30FC\u30C8", (analysis.suggestedRepeatTypes ?? []).slice(0, 3).map((id) => getStrategy(id).nameJa).join(" / ")],
-      ["\u89E3\u6790", analysis.source === "manual" ? "\u624B\u52D5\u6307\u5B9A" : analysis.source === "ai" ? "AI" : "\u30ED\u30FC\u30AB\u30EB\u51E6\u7406"]
+      ["\u89E3\u6790", analysis.source === "manual" ? "\u624B\u52D5\u6307\u5B9A" : analysis.source === "ai" ? "\u88DC\u52A9\u5224\u5B9A" : "\u30ED\u30FC\u30AB\u30EB\u51E6\u7406"]
     ];
     renderBorderWarning();
     renderRebuildability();
@@ -13125,7 +13125,7 @@ ${xrefPos}
     if (!status.transport || !status.images) {
       toggle.checked = false;
       toggle.disabled = true;
-      label3.textContent = status.images ? `\u7D4C\u8DEF: ${status.detail}` : `\u3053\u306E\u74B0\u5883\u3067\u306F\u753B\u50CF\u3092 AI \u306B\u9001\u308C\u307E\u305B\u3093\uFF08${status.detail}\uFF09\u3002\u30ED\u30FC\u30AB\u30EB\u51E6\u7406\u306E\u307F\u3067\u52D5\u4F5C\u3057\u307E\u3059\u3002`;
+      label3.textContent = status.images ? `\u7D4C\u8DEF: ${status.detail}` : `\u3053\u306E\u74B0\u5883\u3067\u306F\u88DC\u52A9\u5224\u5B9A\u3092\u4F7F\u3048\u307E\u305B\u3093\uFF08${status.detail}\uFF09\u3002\u30ED\u30FC\u30AB\u30EB\u51E6\u7406\u306E\u307F\u3067\u52D5\u4F5C\u3057\u307E\u3059\u3002`;
       return;
     }
     label3.textContent = `\u7D4C\u8DEF: ${status.detail}`;
@@ -13155,7 +13155,7 @@ ${xrefPos}
         return;
       }
       const summary = motifs.map((m) => `${m.name}\uFF08${m.categoryLabel}\uFF09`).join("\u3001");
-      toast(`${via === "ai" ? "AI" : "\u30ED\u30FC\u30AB\u30EB"}\u5224\u5B9A: ${summary}${error ? ` / ${error}` : ""}`, 5e3);
+      toast(`${via === "ai" ? "\u88DC\u52A9" : "\u30ED\u30FC\u30AB\u30EB"}\u5224\u5B9A: ${summary}${error ? ` / ${error}` : ""}`, 5e3);
     } catch (e) {
       toast(`\u5206\u985E\u306B\u5931\u6557\u3057\u307E\u3057\u305F: ${e.message}`);
     } finally {
@@ -13586,7 +13586,7 @@ ${xrefPos}
       btn.textContent = "\u63CF\u304D\u76F4\u3057\u4E2D\u2026";
       busy.start();
       await new Promise((r) => setTimeout(r, 40));
-      engine.pushHistory("AI\u3067\u7D99\u304E\u76EE\u3092\u63CF\u304D\u76F4\u3059");
+      engine.pushHistory("\u7D99\u304E\u76EE\u3092\u63CF\u304D\u76F4\u3059");
       const started = Date.now();
       try {
         const inpaint = makeInpainter({ ...settings });
