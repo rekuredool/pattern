@@ -1514,6 +1514,74 @@ output {
   margin: 0;
 }
 
+/* ---------- 処理中の表示 ---------- */
+.busy {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 12, 18, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 120;
+  padding: 16px;
+}
+.busy__box {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 26px 28px;
+  width: min(420px, 100%);
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+}
+.busy__spinner {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 4px solid rgba(255, 255, 255, 0.15);
+  border-top-color: var(--sulfur);
+  animation: busy-spin 0.9s linear infinite;
+}
+@keyframes busy-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.busy__title {
+  font-size: 16px;
+  font-weight: 700;
+}
+.busy__step {
+  font-size: 13px;
+  color: var(--text);
+}
+.busy__bar {
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+.busy__bar span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--sulfur);
+  transition: width 0.6s ease;
+}
+.busy__time {
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.busy__note {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0;
+}
+
 </style>
   </head>
   <body>
@@ -1880,15 +1948,27 @@ output {
         </aside>
       </main>
 
+    <!-- AIで継ぎ目を描き直す：処理中の表示 -->
+    <div class="busy" id="busyOverlay" hidden>
+      <div class="busy__box" role="status" aria-live="polite">
+        <div class="busy__spinner" aria-hidden="true"></div>
+        <div class="busy__title">AIで継ぎ目を描き直しています</div>
+        <div class="busy__step" id="busyStep">準備しています…</div>
+        <div class="busy__bar"><span id="busyBar"></span></div>
+        <div class="busy__time" id="busyTime">0秒</div>
+        <p class="busy__note">このままお待ちください（1〜2分）。ページを閉じたり再読み込みすると止まります。</p>
+      </div>
+    </div>
+
     <!-- AIで継ぎ目を描き直す：中継役の設定（ブラウザの小窓が使えない画面でも出せるよう、ページ内に置く） -->
     <div class="relay" id="relayDialog" hidden>
       <div class="relay__box" role="dialog" aria-labelledby="relayTitle">
-        <h2 id="relayTitle">AIで継ぎ目を描き直す（中継役の設定）</h2>
-        <p class="hint">この機能を使うには、Cloudflare に「中継役」を置く設定が必要です。まだの場合は、一括処理キット（run.bat）をお使いください。</p>
-        <label class="field"><span>中継役の URL</span><input class="input" id="relayUrl" type="url" placeholder="https://rekuredool-fill.○○○.workers.dev" /></label>
-        <label class="field"><span>合言葉</span><input class="input" id="relayPass" type="password" /></label>
+        <h2 id="relayTitle">AIで継ぎ目を描き直す</h2>
+        <p class="hint">このパソコンで初めて使うときだけ、合言葉を入れてください。次からは聞かれません。</p>
+        <input id="relayUrl" type="hidden" />
+        <label class="field"><span>合言葉</span><input class="input" id="relayPass" type="password" autocomplete="current-password" /></label>
         <div class="row row--wrap">
-          <button class="btn btn--primary" id="relayOk">保存して描き直す</button>
+          <button class="btn btn--primary" id="relayOk">描き直す</button>
           <button class="btn btn--ghost" id="relayCancel">閉じる</button>
         </div>
       </div>
@@ -7950,15 +8030,24 @@ output {
   }
   async function repairSeams(source, inpaint, onProgress = () => {
   }) {
+    const breathe = () => new Promise((r) => setTimeout(r, 40));
+    onProgress("\u7D99\u304E\u76EE\u306E\u4F4D\u7F6E\u3092\u8ABF\u3079\u3066\u3044\u307E\u3059\u2026", 3);
+    await breathe();
     let current = readRGB(offsetCanvas(source, 0.5, 0.5));
     const report = [];
-    for (const axis of ["h", "v"]) {
+    for (const [index, axis] of ["h", "v"].entries()) {
+      const base = index * 50;
       const name = axis === "h" ? "\u6A2A\u306E\u5E2F" : "\u7E26\u306E\u5E2F";
+      onProgress(`${index + 1}/2 ${name}\u306E\u63CF\u304D\u76F4\u3059\u7BC4\u56F2\u3092\u6C7A\u3081\u3066\u3044\u307E\u3059\u2026`, base + 5);
+      await breathe();
       const mask = seamMask(current, axis);
       let best = null;
       for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
-        onProgress(`${name}\u3092\u63CF\u304D\u76F4\u3057\u3066\u3044\u307E\u3059\uFF08${attempt}\u56DE\u76EE\uFF09\u2026`);
+        onProgress(`${index + 1}/2 ${name}\u3092AI\u304C\u63CF\u3044\u3066\u3044\u307E\u3059${attempt > 1 ? `\uFF08\u3084\u308A\u76F4\u3057 ${attempt - 1}\u56DE\u76EE\uFF09` : ""}\u2026`, base + 10, { waiting: true, until: base + 42 });
+        await breathe();
         const resultCanvas = await inpaint(maskedPng(current, mask));
+        onProgress(`${index + 1}/2 ${name}\u306E\u4ED5\u4E0A\u304C\u308A\u3092\u78BA\u304B\u3081\u3066\u3044\u307E\u3059\u2026`, base + 45);
+        await breathe();
         const scaled = createCanvas2(current.width, current.height);
         ctx2d(scaled).drawImage(resultCanvas, 0, 0, current.width, current.height);
         let ai = readRGB(scaled);
@@ -10483,12 +10572,15 @@ ${xrefPos}
 
   // src/services/FillClient.js
   var STORE_KEY = "rekuredool-pattern-design:fill-relay";
+  var DEFAULT_RELAY_URL = "https://rekuredool-fill.zena201119850720.workers.dev";
   function loadRelaySettings() {
+    let saved2 = null;
     try {
-      return JSON.parse(localStorage.getItem(STORE_KEY) ?? "null");
+      saved2 = JSON.parse(localStorage.getItem(STORE_KEY) ?? "null");
     } catch {
-      return null;
+      saved2 = null;
     }
+    return { relayUrl: saved2?.relayUrl || DEFAULT_RELAY_URL, passcode: saved2?.passcode || "" };
   }
   function saveRelaySettings(settings) {
     try {
@@ -13367,9 +13459,50 @@ ${xrefPos}
         5e3
       );
     });
+    const busy = /* @__PURE__ */ (() => {
+      let timer = null;
+      let started = 0;
+      let target = 0;
+      let shown = 0;
+      let waiting = null;
+      const set = (pct) => {
+        shown = Math.max(shown, Math.min(99, pct));
+        $("busyBar").style.width = `${shown}%`;
+      };
+      return {
+        start() {
+          started = Date.now();
+          shown = 0;
+          target = 0;
+          waiting = null;
+          $("busyStep").textContent = "\u6E96\u5099\u3057\u3066\u3044\u307E\u3059\u2026";
+          $("busyTime").textContent = "0\u79D2";
+          set(1);
+          $("busyOverlay").hidden = false;
+          clearInterval(timer);
+          timer = setInterval(() => {
+            const sec = Math.round((Date.now() - started) / 1e3);
+            $("busyTime").textContent = sec < 60 ? `${sec}\u79D2` : `${Math.floor(sec / 60)}\u5206${sec % 60}\u79D2`;
+            if (waiting) set(shown + (waiting.until - shown) * 0.06);
+          }, 1e3);
+        },
+        step(message, pct, opts = {}) {
+          $("busyStep").textContent = message;
+          if (typeof pct === "number") set(pct);
+          waiting = opts.waiting ? { until: opts.until ?? pct + 30 } : null;
+        },
+        done() {
+          set(100);
+          $("busyBar").style.width = "100%";
+          clearInterval(timer);
+          setTimeout(() => $("busyOverlay").hidden = true, 400);
+        }
+      };
+    })();
     const askRelaySettings = (current) => new Promise((resolve) => {
       const dlg = $("relayDialog");
       $("relayUrl").value = current?.relayUrl ?? "";
+      setTimeout(() => $("relayPass").focus(), 30);
       $("relayPass").value = "";
       dlg.hidden = false;
       const done = (value) => {
@@ -13381,13 +13514,16 @@ ${xrefPos}
       $("relayOk").onclick = () => {
         const relayUrl = $("relayUrl").value.trim();
         const passcode = $("relayPass").value.trim();
-        if (!/^https:\/\//.test(relayUrl) || !passcode) {
-          toast("\u4E2D\u7D99\u5F79\u306E URL\uFF08https:// \u304B\u3089\u59CB\u307E\u308B\u3082\u306E\uFF09\u3068\u5408\u8A00\u8449\u3092\u5165\u308C\u3066\u304F\u3060\u3055\u3044", 5e3);
+        if (!passcode) {
+          toast("\u5408\u8A00\u8449\u3092\u5165\u308C\u3066\u304F\u3060\u3055\u3044", 4e3);
           return;
         }
         done({ relayUrl, passcode });
       };
       $("relayCancel").onclick = () => done(null);
+      $("relayPass").onkeydown = (ev) => {
+        if (ev.key === "Enter") $("relayOk").click();
+      };
     });
     $("aiFillBtn").addEventListener("click", async () => {
       if (!(engine.recipe.meta.original?.imageId || engine.recipe.background.imageId)) {
@@ -13402,12 +13538,16 @@ ${xrefPos}
       }
       const btn = $("aiFillBtn");
       btn.disabled = true;
+      const label3 = btn.textContent;
+      btn.textContent = "\u63CF\u304D\u76F4\u3057\u4E2D\u2026";
+      busy.start();
+      await new Promise((r) => setTimeout(r, 40));
       engine.pushHistory("AI\u3067\u7D99\u304E\u76EE\u3092\u63CF\u304D\u76F4\u3059");
       const started = Date.now();
       try {
         const inpaint = makeInpainter({ ...settings });
         const result = await engine.aiRepairSeams(inpaint, {
-          onProgress: (msg) => toast(`${msg}\uFF08${Math.round((Date.now() - started) / 1e3)}\u79D2\uFF09`, 6e4)
+          onProgress: (msg, pct, opts) => busy.step(msg, pct, opts)
         });
         if (!result.applied) {
           toast(result.reason, 5e3);
@@ -13427,7 +13567,9 @@ ${xrefPos}
           toast(`\u63CF\u304D\u76F4\u3057\u306B\u5931\u6557\u3057\u307E\u3057\u305F\uFF1A${e.message}`, 7e3);
         }
       } finally {
+        busy.done();
         btn.disabled = false;
+        btn.textContent = label3;
       }
     });
     $("changeBtn").addEventListener("click", () => {
