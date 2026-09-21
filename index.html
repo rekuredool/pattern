@@ -1476,6 +1476,44 @@ output {
   outline-offset: -2px;
 }
 
+.btn--ai {
+  background: var(--woad);
+  border-color: var(--woad);
+  color: #fff;
+  font-weight: 700;
+}
+.btn--ai:hover {
+  background: var(--woad-bright);
+}
+.btn--ai[disabled] {
+  opacity: 0.6;
+}
+
+/* ---------- 中継役の設定 ---------- */
+.relay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 16px;
+}
+.relay__box {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px;
+  width: min(460px, 100%);
+  display: grid;
+  gap: 10px;
+}
+.relay__box h2 {
+  font-size: 15px;
+  margin: 0;
+}
+
 </style>
   </head>
   <body>
@@ -1492,6 +1530,7 @@ output {
             <input id="fileInput" type="file" accept="image/*,.heic,.heif" multiple hidden />
           </label>
           <button class="btn btn--primary" id="autoBtn" title="設定を変えてもう一度自動生成する">AUTO PATTERN</button>
+          <button class="btn btn--ai" id="aiFillBtn" title="継ぎ目をAIで描き直して、完全なシームレスにします（社内用・合言葉が必要）">AIで継ぎ目を描き直す</button>
           <button class="btn btn--change" id="changeBtn" title="別の案を試す（シームレスの4条件を通った案だけを順に表示）">
             CHANGE PATTERN
           </button>
@@ -1840,6 +1879,20 @@ output {
           </section>
         </aside>
       </main>
+
+    <!-- AIで継ぎ目を描き直す：中継役の設定（ブラウザの小窓が使えない画面でも出せるよう、ページ内に置く） -->
+    <div class="relay" id="relayDialog" hidden>
+      <div class="relay__box" role="dialog" aria-labelledby="relayTitle">
+        <h2 id="relayTitle">AIで継ぎ目を描き直す（中継役の設定）</h2>
+        <p class="hint">この機能を使うには、Cloudflare に「中継役」を置く設定が必要です。まだの場合は、一括処理キット（run.bat）をお使いください。</p>
+        <label class="field"><span>中継役の URL</span><input class="input" id="relayUrl" type="url" placeholder="https://rekuredool-fill.○○○.workers.dev" /></label>
+        <label class="field"><span>合言葉</span><input class="input" id="relayPass" type="password" /></label>
+        <div class="row row--wrap">
+          <button class="btn btn--primary" id="relayOk">保存して描き直す</button>
+          <button class="btn btn--ghost" id="relayCancel">閉じる</button>
+        </div>
+      </div>
+    </div>
     </div>
     <div class="toast" id="toast" hidden></div>
     <script>
@@ -4431,21 +4484,21 @@ output {
       };
     }
     /** 変更を加える「直前」に呼ぶ */
-    push(recipe2, label2 = "\u5909\u66F4") {
-      this.past.push({ label: label2, snapshot: cloneRecipe(recipe2) });
+    push(recipe2, label3 = "\u5909\u66F4") {
+      this.past.push({ label: label3, snapshot: cloneRecipe(recipe2) });
       if (this.past.length > this.limit) this.past.shift();
       this.future.length = 0;
       this.#notify();
     }
     /** 連続操作（ドラッグ中の細かい変化）をまとめる */
-    pushCoalesced(recipe2, label2, windowMs = 600) {
+    pushCoalesced(recipe2, label3, windowMs = 600) {
       const last = this.past.at(-1);
       const now = Date.now();
-      if (last && last.label === label2 && now - (last.at ?? 0) < windowMs) {
+      if (last && last.label === label3 && now - (last.at ?? 0) < windowMs) {
         last.at = now;
         return;
       }
-      this.past.push({ label: label2, snapshot: cloneRecipe(recipe2), at: now });
+      this.past.push({ label: label3, snapshot: cloneRecipe(recipe2), at: now });
       if (this.past.length > this.limit) this.past.shift();
       this.future.length = 0;
       this.#notify();
@@ -4809,10 +4862,10 @@ output {
       const colors = merged;
       if (!colors.length) return [];
       const all = [{ r: ground.r, g: ground.g, b: ground.b }, ...colors];
-      const label2 = new Int16Array(width * height);
-      for (let p = 0, i = 0; p < label2.length; p++, i += 4) {
+      const label3 = new Int16Array(width * height);
+      for (let p = 0, i = 0; p < label3.length; p++, i += 4) {
         if (d[i + 3] < 24) {
-          label2[p] = 0;
+          label3[p] = 0;
           continue;
         }
         let best = 0;
@@ -4825,15 +4878,15 @@ output {
             best = k;
           }
         }
-        label2[p] = best;
+        label3[p] = best;
       }
       const results = [];
       const total = width * height;
       const visited = new Uint8Array(total);
       const stack = new Int32Array(total);
       for (let start = 0; start < total; start++) {
-        if (visited[start] || label2[start] === 0) continue;
-        const cls = label2[start];
+        if (visited[start] || label3[start] === 0) continue;
+        const cls = label3[start];
         let sp = 0;
         stack[sp++] = start;
         visited[start] = 1;
@@ -4853,7 +4906,7 @@ output {
           if (y > maxY) maxY = y;
           const n = [p - 1, p + 1, p - width, p + width];
           for (const q of n) {
-            if (q < 0 || q >= total || visited[q] || label2[q] !== cls) continue;
+            if (q < 0 || q >= total || visited[q] || label3[q] !== cls) continue;
             if (q === p - 1 && x === 0 || q === p + 1 && x === width - 1) continue;
             visited[q] = 1;
             stack[sp++] = q;
@@ -7458,17 +7511,17 @@ output {
       for (let x = 0; x < w; x++) {
         const q = (y * w + x) * 4;
         for (let ch = 0; ch < 3; ch++) {
-          let blur = 0;
+          let blur2 = 0;
           let ws = 0;
           for (let dy = -1; dy <= 1; dy++) {
             for (let dx = -1; dx <= 1; dx++) {
               const wk = dx === 0 && dy === 0 ? 4 : dx === 0 || dy === 0 ? 2 : 1;
-              blur += s[(wrapY(y + dy) * w + wrapX(x + dx)) * 4 + ch] * wk;
+              blur2 += s[(wrapY(y + dy) * w + wrapX(x + dx)) * 4 + ch] * wk;
               ws += wk;
             }
           }
-          blur /= ws;
-          const v = s[q + ch] + (s[q + ch] - blur) * amount;
+          blur2 /= ws;
+          const v = s[q + ch] + (s[q + ch] - blur2) * amount;
           out[q + ch] = v < 0 ? 0 : v > 255 ? 255 : v;
         }
         out[q + 3] = s[q + 3];
@@ -7477,6 +7530,453 @@ output {
     img.data.set(out);
     c.putImageData(img, 0, 0);
     return canvas;
+  }
+
+  // src/core/image/MotifSafeTiler.js
+  function inkField2(canvas, ground, { threshold = 46, open = 2 } = {}) {
+    const { width, height, data } = getImageData(canvas);
+    let mask = new Uint8Array(width * height);
+    for (let p = 0, i = 0; p < mask.length; p++, i += 4) {
+      const d = Math.hypot(data[i] - ground.r, data[i + 1] - ground.g, data[i + 2] - ground.b);
+      mask[p] = d > threshold ? 1 : 0;
+    }
+    const morph = (src, grow) => {
+      const out = new Uint8Array(src);
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          const p = y * width + x;
+          const n = [p - 1, p + 1, p - width, p + width];
+          if (grow) {
+            if (!src[p] && n.some((q) => src[q])) out[p] = 1;
+          } else if (src[p] && n.some((q) => !src[q])) out[p] = 0;
+        }
+      }
+      return out;
+    };
+    for (let k = 0; k < open; k++) mask = morph(mask, false);
+    for (let k = 0; k < open; k++) mask = morph(mask, true);
+    return { mask, width, height, data };
+  }
+  function groundSide(blocked, len, width) {
+    const total = len * width;
+    const prev = new Int32Array(total).fill(-2);
+    const queue = new Int32Array(total);
+    let head = 0;
+    let tail = 0;
+    for (let i = 0; i < width; i++) {
+      const p = i;
+      if (!blocked[p]) {
+        prev[p] = -1;
+        queue[tail++] = p;
+      }
+    }
+    let goal = -1;
+    while (head < tail) {
+      const p = queue[head++];
+      const j = p / width | 0;
+      const i = p % width;
+      if (j === len - 1) {
+        goal = p;
+        break;
+      }
+      const neighbours = [];
+      if (i > 0) neighbours.push(p - 1);
+      if (i < width - 1) neighbours.push(p + 1);
+      if (j > 0) neighbours.push(p - width);
+      if (j < len - 1) neighbours.push(p + width);
+      for (const q of neighbours) {
+        if (blocked[q] || prev[q] !== -2) continue;
+        prev[q] = p;
+        queue[tail++] = q;
+      }
+    }
+    if (goal < 0) return null;
+    const wall = new Uint8Array(total);
+    for (let p = goal; p >= 0; p = prev[p]) {
+      wall[p] = 1;
+      if (prev[p] === -1) break;
+    }
+    const side = new Uint8Array(total);
+    const stack = new Int32Array(total);
+    let sp = 0;
+    for (let j = 0; j < len; j++) {
+      const p = j * width;
+      if (!wall[p] && !side[p]) {
+        side[p] = 1;
+        stack[sp++] = p;
+      }
+    }
+    while (sp > 0) {
+      const p = stack[--sp];
+      const j = p / width | 0;
+      const i = p % width;
+      const neighbours = [];
+      if (i > 0) neighbours.push(p - 1);
+      if (i < width - 1) neighbours.push(p + 1);
+      if (j > 0) neighbours.push(p - width);
+      if (j < len - 1) neighbours.push(p + width);
+      for (const q of neighbours) {
+        if (wall[q] || side[q]) continue;
+        side[q] = 1;
+        stack[sp++] = q;
+      }
+    }
+    return side;
+  }
+  function joinAxisSafe(source, axis, overlap, ground) {
+    const w = source.width;
+    const h = source.height;
+    const outW = axis === "x" ? w - overlap : w;
+    const outH = axis === "y" ? h - overlap : h;
+    const { mask } = inkField2(source, ground);
+    const src = getImageData(source).data;
+    const len = axis === "x" ? h : w;
+    const blocked = new Uint8Array(len * overlap);
+    const baseIdx = (i, j) => axis === "x" ? j * w + i : i * w + j;
+    const patchIdx = (i, j) => axis === "x" ? j * w + (outW + i) : (outH + i) * w + j;
+    for (let j = 0; j < len; j++) {
+      for (let i = 0; i < overlap; i++) {
+        blocked[j * overlap + i] = mask[baseIdx(i, j)] || mask[patchIdx(i, j)] ? 1 : 0;
+      }
+    }
+    const side = groundSide(blocked, len, overlap);
+    if (!side) return null;
+    const out = createCanvas2(outW, outH);
+    const octx = ctx2d(out);
+    const img = octx.createImageData(outW, outH);
+    const dst = img.data;
+    for (let y = 0; y < outH; y++) {
+      for (let x = 0; x < outW; x++) {
+        const o = (y * outW + x) * 4;
+        let s;
+        if (axis === "x") {
+          if (x < overlap) s = side[y * overlap + x] ? patchIdx(x, y) : baseIdx(x, y);
+          else s = y * w + x;
+        } else {
+          if (y < overlap) s = side[x * overlap + y] ? patchIdx(y, x) : baseIdx(y, x);
+          else s = y * w + x;
+        }
+        const i = s * 4;
+        dst[o] = src[i];
+        dst[o + 1] = src[i + 1];
+        dst[o + 2] = src[i + 2];
+        dst[o + 3] = 255;
+      }
+    }
+    octx.putImageData(img, 0, 0);
+    return out;
+  }
+  function tileWithoutCuttingMotifs(canvas, { overlaps = [0.08, 0.12, 0.18, 0.25, 0.33] } = {}) {
+    const ground = estimateGroundColor(canvas);
+    for (const ratio of overlaps) {
+      const ox = Math.max(8, Math.round(canvas.width * ratio));
+      const afterX = joinAxisSafe(canvas, "x", ox, ground);
+      if (!afterX) continue;
+      for (const ratioY of overlaps) {
+        const oy = Math.max(8, Math.round(afterX.height * ratioY));
+        const afterY = joinAxisSafe(afterX, "y", oy, ground);
+        if (!afterY) continue;
+        return { applied: true, canvas: afterY, overlap: { x: ratio, y: ratioY }, ground };
+      }
+    }
+    return { applied: false, reason: "\u30E2\u30C1\u30FC\u30D5\u3092\u907F\u3051\u3066\u5207\u308C\u308B\u7D4C\u8DEF\u304C\u3042\u308A\u307E\u305B\u3093\uFF08\u5730\u306E\u9699\u9593\u304C\u7E4B\u304C\u3063\u3066\u3044\u306A\u3044\u7D75\u3067\u3059\uFF09" };
+  }
+
+  // src/core/image/AiSeamRepair.js
+  var SEAM_BAND = 0.018;
+  var MAX_TRIES = 3;
+  function toRGB(imageData) {
+    const { width, height, data } = imageData;
+    const rgb = new Float32Array(width * height * 3);
+    for (let p = 0, i = 0; p < width * height; p++, i += 4) {
+      rgb[p * 3] = data[i];
+      rgb[p * 3 + 1] = data[i + 1];
+      rgb[p * 3 + 2] = data[i + 2];
+    }
+    return { width, height, rgb };
+  }
+  function fromRGB({ width, height, rgb }) {
+    const c = createCanvas2(width, height);
+    const x = ctx2d(c);
+    const img = x.createImageData(width, height);
+    for (let p = 0, i = 0; p < width * height; p++, i += 4) {
+      img.data[i] = Math.max(0, Math.min(255, Math.round(rgb[p * 3])));
+      img.data[i + 1] = Math.max(0, Math.min(255, Math.round(rgb[p * 3 + 1])));
+      img.data[i + 2] = Math.max(0, Math.min(255, Math.round(rgb[p * 3 + 2])));
+      img.data[i + 3] = 255;
+    }
+    x.putImageData(img, 0, 0);
+    return c;
+  }
+  var readRGB = (canvas) => toRGB(ctx2d(canvas).getImageData(0, 0, canvas.width, canvas.height));
+  function groundColour({ width, height, rgb }) {
+    const counts = /* @__PURE__ */ new Map();
+    for (let p = 0; p < width * height; p += 3) {
+      const key = (rgb[p * 3] / 24 | 0) * 1e4 + (rgb[p * 3 + 1] / 24 | 0) * 100 + (rgb[p * 3 + 2] / 24 | 0);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    let top = 0;
+    let best = -1;
+    for (const [k, v] of counts) if (v > best) best = v, top = k;
+    return [(top / 1e4 | 0) * 24 + 12, (top / 100 | 0) % 100 * 24 + 12, top % 100 * 24 + 12];
+  }
+  function dilate(mask, w, h, n = 1) {
+    let cur = mask;
+    for (let k = 0; k < n; k++) {
+      const next = new Uint8Array(cur);
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const p = y * w + x;
+          if (cur[p]) continue;
+          if (x > 0 && cur[p - 1] || x < w - 1 && cur[p + 1] || y > 0 && cur[p - w] || y < h - 1 && cur[p + w]) next[p] = 1;
+        }
+      }
+      cur = next;
+    }
+    return cur;
+  }
+  function erode2(mask, w, h, n = 1) {
+    let cur = mask;
+    for (let k = 0; k < n; k++) {
+      const next = new Uint8Array(cur);
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const p = y * w + x;
+          if (!cur[p]) continue;
+          if (x === 0 || x === w - 1 || y === 0 || y === h - 1 || !cur[p - 1] || !cur[p + 1] || !cur[p - w] || !cur[p + w]) next[p] = 0;
+        }
+      }
+      cur = next;
+    }
+    return cur;
+  }
+  var closing = (m, w, h, n) => erode2(dilate(m, w, h, n), w, h, n);
+  var opening = (m, w, h, n) => dilate(erode2(m, w, h, n), w, h, n);
+  function fillHoles2(mask, w, h) {
+    const seen = new Uint8Array(w * h);
+    const stack = [];
+    const push = (p) => {
+      if (!mask[p] && !seen[p]) {
+        seen[p] = 1;
+        stack.push(p);
+      }
+    };
+    for (let x = 0; x < w; x++) push(x), push((h - 1) * w + x);
+    for (let y = 0; y < h; y++) push(y * w), push(y * w + w - 1);
+    while (stack.length) {
+      const p = stack.pop();
+      const x = p % w;
+      if (x > 0) push(p - 1);
+      if (x < w - 1) push(p + 1);
+      if (p >= w) push(p - w);
+      if (p + w < w * h) push(p + w);
+    }
+    const out = new Uint8Array(w * h);
+    for (let p = 0; p < w * h; p++) out[p] = mask[p] || !seen[p] ? 1 : 0;
+    return out;
+  }
+  function label2(mask, w, h) {
+    const lab = new Int32Array(w * h);
+    const sizes = [0];
+    let n = 0;
+    const stack = new Int32Array(w * h);
+    for (let s = 0; s < w * h; s++) {
+      if (!mask[s] || lab[s]) continue;
+      n += 1;
+      let sp = 0;
+      stack[sp++] = s;
+      lab[s] = n;
+      let size = 0;
+      while (sp) {
+        const p = stack[--sp];
+        size += 1;
+        const x = p % w;
+        const nb = [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, p - w, p + w];
+        for (const q of nb) {
+          if (q < 0 || q >= w * h || !mask[q] || lab[q]) continue;
+          lab[q] = n;
+          stack[sp++] = q;
+        }
+      }
+      sizes.push(size);
+    }
+    return { lab, sizes };
+  }
+  function blur(field, w, h, sigma) {
+    const r = Math.max(1, Math.round(sigma * 0.85));
+    let a = Float32Array.from(field);
+    let b = new Float32Array(w * h);
+    for (let pass = 0; pass < 3; pass++) {
+      for (let y = 0; y < h; y++) {
+        let acc = 0;
+        const row = y * w;
+        for (let x = -r; x <= r; x++) acc += a[row + Math.min(w - 1, Math.max(0, x))];
+        for (let x = 0; x < w; x++) {
+          b[row + x] = acc / (2 * r + 1);
+          acc += a[row + Math.min(w - 1, x + r + 1)] - a[row + Math.max(0, x - r)];
+        }
+      }
+      for (let x = 0; x < w; x++) {
+        let acc = 0;
+        for (let y = -r; y <= r; y++) acc += b[Math.min(h - 1, Math.max(0, y)) * w + x];
+        for (let y = 0; y < h; y++) {
+          a[y * w + x] = acc / (2 * r + 1);
+          acc += b[Math.min(h - 1, y + r + 1) * w + x] - b[Math.max(0, y - r) * w + x];
+        }
+      }
+    }
+    return a;
+  }
+  function seamMask(img, axis) {
+    const { width: w, height: h, rgb } = img;
+    const g = groundColour(img);
+    let ink = new Uint8Array(w * h);
+    for (let p = 0; p < w * h; p++) {
+      const d = Math.hypot(rgb[p * 3] - g[0], rgb[p * 3 + 1] - g[1], rgb[p * 3 + 2] - g[2]);
+      ink[p] = d > 40 ? 1 : 0;
+    }
+    ink = opening(ink, w, h, 1);
+    const band = new Uint8Array(w * h);
+    const bx = Math.round(w * SEAM_BAND);
+    const by = Math.round(h * SEAM_BAND);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (axis === "v" && Math.abs(x - (w >> 1)) < bx) band[y * w + x] = 1;
+        if (axis === "h" && Math.abs(y - (h >> 1)) < by) band[y * w + x] = 1;
+      }
+    }
+    const { lab, sizes } = label2(ink, w, h);
+    const touching = /* @__PURE__ */ new Set();
+    for (let p = 0; p < w * h; p++) if (band[p] && lab[p] && sizes[lab[p]] < w * h * 6e-3) touching.add(lab[p]);
+    let mask = new Uint8Array(w * h);
+    for (let p = 0; p < w * h; p++) mask[p] = band[p] || touching.has(lab[p]) ? 1 : 0;
+    mask = closing(mask, w, h, 6);
+    mask = fillHoles2(mask, w, h);
+    mask = dilate(mask, w, h, 4);
+    return mask;
+  }
+  function localToneMatch(ai, orig, mask, sigma = 35) {
+    const { width: w, height: h } = orig;
+    const g = groundColour(orig);
+    const near = (rgb, p) => Math.hypot(rgb[p * 3] - g[0], rgb[p * 3 + 1] - g[1], rgb[p * 3 + 2] - g[2]) < 45;
+    const wOut = new Float32Array(w * h);
+    const wIn = new Float32Array(w * h);
+    for (let p = 0; p < w * h; p++) {
+      wOut[p] = !mask[p] && near(orig.rgb, p) ? 1 : 0;
+      wIn[p] = mask[p] && near(ai.rgb, p) ? 1 : 0;
+    }
+    const bOut = blur(wOut, w, h, sigma);
+    const bIn = blur(wIn, w, h, sigma);
+    const out = Float32Array.from(ai.rgb);
+    for (let c = 0; c < 3; c++) {
+      const sOut = new Float32Array(w * h);
+      const sIn = new Float32Array(w * h);
+      for (let p = 0; p < w * h; p++) {
+        sOut[p] = wOut[p] ? orig.rgb[p * 3 + c] : 0;
+        sIn[p] = wIn[p] ? ai.rgb[p * 3 + c] : 0;
+      }
+      const aOut = blur(sOut, w, h, sigma);
+      const aIn = blur(sIn, w, h, sigma);
+      let field = new Float32Array(w * h);
+      for (let p = 0; p < w * h; p++) {
+        field[p] = bOut[p] > 1e-3 && bIn[p] > 1e-3 ? aOut[p] / bOut[p] - aIn[p] / bIn[p] : 0;
+      }
+      field = blur(field, w, h, sigma / 2);
+      for (let p = 0; p < w * h; p++) if (mask[p]) out[p * 3 + c] = ai.rgb[p * 3 + c] + field[p];
+    }
+    return { width: w, height: h, rgb: out };
+  }
+  function composite(orig, ai, mask) {
+    const { width: w, height: h } = orig;
+    const dist = new Uint8Array(w * h);
+    let ring = erode2(mask, w, h, 1);
+    for (let p = 0; p < w * h; p++) dist[p] = mask[p] ? 1 : 0;
+    for (let k = 2; k <= 3; k++) {
+      for (let p = 0; p < w * h; p++) if (ring[p]) dist[p] = k;
+      ring = erode2(ring, w, h, 1);
+    }
+    for (let p = 0; p < w * h; p++) if (ring[p]) dist[p] = 4;
+    const out = Float32Array.from(orig.rgb);
+    for (let p = 0; p < w * h; p++) {
+      if (!mask[p]) continue;
+      const a = Math.min(1, dist[p] / 3);
+      for (let c = 0; c < 3; c++) out[p * 3 + c] = orig.rgb[p * 3 + c] * (1 - a) + ai.rgb[p * 3 + c] * a;
+    }
+    return { width: w, height: h, rgb: out };
+  }
+  function fidelity(ai, orig, mask) {
+    let s = 0;
+    let n = 0;
+    for (let p = 0; p < orig.width * orig.height; p += 5) {
+      if (mask[p]) continue;
+      s += Math.abs(ai.rgb[p * 3] - orig.rgb[p * 3]) + Math.abs(ai.rgb[p * 3 + 1] - orig.rgb[p * 3 + 1]) + Math.abs(ai.rgb[p * 3 + 2] - orig.rgb[p * 3 + 2]);
+      n += 3;
+    }
+    return s / Math.max(1, n);
+  }
+  function groundMatches(tile, mask) {
+    const inside = [];
+    const outside = [];
+    for (let p = 0; p < tile.width * tile.height; p += 3) {
+      const l = (tile.rgb[p * 3] + tile.rgb[p * 3 + 1] + tile.rgb[p * 3 + 2]) / 3;
+      (mask[p] ? inside : outside).push(l);
+    }
+    const top = (arr) => {
+      arr.sort((a, b) => a - b);
+      const q = arr.slice(Math.floor(arr.length * 0.7));
+      return q[q.length >> 1] ?? 0;
+    };
+    const diff = Math.abs(top(inside) - top(outside));
+    return { ok: diff <= 8, diff: Math.round(diff * 10) / 10 };
+  }
+  function maskedPng(img, mask) {
+    const sw = Math.floor(img.width / 32) * 32;
+    const sh = Math.floor(img.height / 32) * 32;
+    const full = createCanvas2(img.width, img.height);
+    const fx = ctx2d(full);
+    const data = fx.createImageData(img.width, img.height);
+    for (let p = 0, i = 0; p < img.width * img.height; p++, i += 4) {
+      data.data[i] = img.rgb[p * 3];
+      data.data[i + 1] = img.rgb[p * 3 + 1];
+      data.data[i + 2] = img.rgb[p * 3 + 2];
+      data.data[i + 3] = mask[p] ? 0 : 255;
+    }
+    fx.putImageData(data, 0, 0);
+    const out = createCanvas2(sw, sh);
+    const ox = ctx2d(out);
+    ox.imageSmoothingEnabled = false;
+    ox.drawImage(full, 0, 0, sw, sh);
+    return out;
+  }
+  async function repairSeams(source, inpaint, onProgress = () => {
+  }) {
+    let current = readRGB(offsetCanvas(source, 0.5, 0.5));
+    const report = [];
+    for (const axis of ["h", "v"]) {
+      const name = axis === "h" ? "\u6A2A\u306E\u5E2F" : "\u7E26\u306E\u5E2F";
+      const mask = seamMask(current, axis);
+      let best = null;
+      for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
+        onProgress(`${name}\u3092\u63CF\u304D\u76F4\u3057\u3066\u3044\u307E\u3059\uFF08${attempt}\u56DE\u76EE\uFF09\u2026`);
+        const resultCanvas = await inpaint(maskedPng(current, mask));
+        const scaled = createCanvas2(current.width, current.height);
+        ctx2d(scaled).drawImage(resultCanvas, 0, 0, current.width, current.height);
+        let ai = readRGB(scaled);
+        const drift = fidelity(ai, current, mask);
+        ai = localToneMatch(ai, current, mask);
+        const cand = composite(current, ai, mask);
+        const ground = groundMatches(cand, mask);
+        const ok = ground.ok && drift <= 25;
+        const score = ground.diff + drift / 5;
+        if (!best || ok && !best.ok || ok === best.ok && score < best.score) {
+          best = { tile: cand, ok, attempt, drift: Math.round(drift * 10) / 10, ground: ground.diff, score };
+        }
+        if (ok) break;
+      }
+      current = best.tile;
+      report.push({ axis: name, ok: best.ok, attempt: best.attempt, drift: best.drift, ground: best.ground });
+    }
+    return { canvas: fromRGB(current), report, ok: report.every((r) => r.ok) };
   }
 
   // src/core/image/TileEnlarger.js
@@ -7582,9 +8082,9 @@ output {
     }
     // ---- undo / redo ----------------------------------------------------
     /** 変更を加える直前に呼ぶ。coalesce=true で連続操作をまとめる */
-    pushHistory(label2, { coalesce = false } = {}) {
-      if (coalesce) this.history.pushCoalesced(this.recipe, label2);
-      else this.history.push(this.recipe, label2);
+    pushHistory(label3, { coalesce = false } = {}) {
+      if (coalesce) this.history.pushCoalesced(this.recipe, label3);
+      else this.history.push(this.recipe, label3);
     }
     undo() {
       const entry = this.history.undo(this.recipe);
@@ -8237,6 +8737,57 @@ output {
       this.markDirty();
       return { applied: true, motifId: motif.id, size: { width: cut.canvas.width, height: cut.canvas.height } };
     }
+    /**
+     * モチーフを1つも切らずにタイル化する。
+     * 重ね帯の中で、地（背景）だけを通る経路を探して切る。
+     */
+    makeTileableWithoutCuttingMotifs() {
+      const bg = this.recipe.background;
+      if (bg.type !== "image" || !bg.imageId) return { applied: false, reason: "\u753B\u50CF\u306E\u67C4\u3067\u306F\u3042\u308A\u307E\u305B\u3093" };
+      const source = this.imageStore.getCanvas(bg.imageId);
+      const before = this.snapshot();
+      const r = tileWithoutCuttingMotifs(source);
+      if (!r.applied) return r;
+      const entry = this.imageStore.add(r.canvas, { name: "\u5165\u7A3F\u753B\u50CF\uFF08\u30E2\u30C1\u30FC\u30D5\u3092\u5207\u3089\u305A\u306B\u30BF\u30A4\u30EB\u5316\uFF09" });
+      const unit = this.recipe.repeatUnit;
+      unit.width = r.canvas.width;
+      unit.height = r.canvas.height;
+      this.recipe.background = { ...bg, imageId: entry.id, imageFit: "stretch" };
+      this.recipe.seamlessSettings = { ...this.recipe.seamlessSettings, edgeMode: "none", blendEdges: false };
+      this.normalizeRepeatSize();
+      this.markDirty();
+      const seam = this.checkSeamless();
+      if (!seam.ok) {
+        this.setRecipe(before);
+        return { applied: false, reason: `\u30E2\u30C1\u30FC\u30D5\u3092\u907F\u3051\u3066\u7E4B\u3044\u3060\u304C\u691C\u67FB\u3092\u901A\u3089\u306A\u3044\uFF08${seam.percent}%\uFF09` };
+      }
+      return { applied: true, overlap: r.overlap, size: { width: r.canvas.width, height: r.canvas.height } };
+    }
+    /**
+     * 継ぎ目を画像生成AI（FLUX Fill）で描き直して、完全なシームレスにする。
+     * 読み込んだ元の絵から作り直す（切り貼りなど、前の加工は引き継がない）。
+     * @param {(png:HTMLCanvasElement)=>Promise<HTMLCanvasElement>} inpaint 中継役を通した描き直し
+     */
+    async aiRepairSeams(inpaint, { onProgress = () => {
+    } } = {}) {
+      const originalId = this.recipe.meta.original?.imageId ?? this.recipe.background.imageId;
+      const source = originalId ? this.imageStore.getCanvas(originalId) : null;
+      if (!source) return { applied: false, reason: "\u5148\u306B\u67C4\u306E\u753B\u50CF\u3092\u8AAD\u307F\u8FBC\u3093\u3067\u304F\u3060\u3055\u3044" };
+      const result = await repairSeams(source, inpaint, onProgress);
+      const entry = this.imageStore.add(result.canvas, { name: "\u5165\u7A3F\u753B\u50CF\uFF08AI\u3067\u7D99\u304E\u76EE\u3092\u63CF\u304D\u76F4\u3057\uFF09" });
+      const unit = this.recipe.repeatUnit;
+      unit.width = result.canvas.width;
+      unit.height = result.canvas.height;
+      this.recipe.background = { ...this.recipe.background, type: "image", imageId: entry.id, imageFit: "stretch", palette: null };
+      this.recipe.seamlessSettings = { ...this.recipe.seamlessSettings, edgeMode: "none", blendEdges: false };
+      this.recipe.motifs = [];
+      this.recipe.placements = [];
+      this.recipe.repeatStrategy = "straight";
+      this.recipe.meta.seamMethod = "ai-fill";
+      this.normalizeRepeatSize();
+      this.markDirty();
+      return { applied: true, ok: result.ok, report: result.report };
+    }
     /** 2枚を合わせる：地は A、柄は B */
     mixTwoImages(groundImage, motifImage, options = {}) {
       const result = this.mixer.mixBest(groundImage, motifImage, options);
@@ -8688,9 +9239,9 @@ output {
       this.lastError = null;
       this.label = "\u306A\u3057\uFF08\u30ED\u30FC\u30AB\u30EB\u51E6\u7406\u306E\u307F\uFF09";
     }
-    configure({ request, label: label2 = "\u30AB\u30B9\u30BF\u30E0 AI" }) {
+    configure({ request, label: label3 = "\u30AB\u30B9\u30BF\u30E0 AI" }) {
       this.transport = typeof request === "function" ? request : null;
-      this.label = this.transport ? label2 : "\u306A\u3057\uFF08\u30ED\u30FC\u30AB\u30EB\u51E6\u7406\u306E\u307F\uFF09";
+      this.label = this.transport ? label3 : "\u306A\u3057\uFF08\u30ED\u30FC\u30AB\u30EB\u51E6\u7406\u306E\u307F\uFF09";
       return this;
     }
     isAvailable() {
@@ -8970,16 +9521,16 @@ output {
     }, targetScore = 90, maxRepairs = 4, forceInputType = null, forceGarment = false } = {}) {
       const engine2 = this.engine;
       const steps = [];
-      const step = async (id, label2, fn) => {
-        onStep({ id, label: label2, status: "running" });
+      const step = async (id, label3, fn) => {
+        onStep({ id, label: label3, status: "running" });
         try {
           const detail = await fn();
-          const entry = { id, label: label2, status: "done", detail: detail ?? "" };
+          const entry = { id, label: label3, status: "done", detail: detail ?? "" };
           steps.push(entry);
           onStep(entry);
           return detail;
         } catch (e) {
-          const entry = { id, label: label2, status: "failed", detail: e.message };
+          const entry = { id, label: label3, status: "failed", detail: e.message };
           steps.push(entry);
           onStep(entry);
           return null;
@@ -9930,6 +10481,64 @@ ${xrefPos}
     return String(name || "pattern").trim().replace(/[^\w\-一-龯ぁ-んァ-ヶ]+/g, "-").slice(0, 48) || "pattern";
   }
 
+  // src/services/FillClient.js
+  var STORE_KEY = "rekuredool-pattern-design:fill-relay";
+  function loadRelaySettings() {
+    try {
+      return JSON.parse(localStorage.getItem(STORE_KEY) ?? "null");
+    } catch {
+      return null;
+    }
+  }
+  function saveRelaySettings(settings) {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(settings));
+    } catch {
+    }
+  }
+  function clearRelaySettings() {
+    try {
+      localStorage.removeItem(STORE_KEY);
+    } catch {
+    }
+  }
+  async function post(url, body) {
+    const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const err = new Error(data.error || `\u4E2D\u7D99\u5F79\u304C\u30A8\u30E9\u30FC\u3092\u8FD4\u3057\u307E\u3057\u305F\uFF08${r.status}\uFF09`);
+      err.status = r.status;
+      throw err;
+    }
+    return data;
+  }
+  function makeInpainter({ relayUrl, passcode, onWait = () => {
+  } }) {
+    const base = relayUrl.replace(/\/+$/, "");
+    return async (pngCanvas) => {
+      const image = pngCanvas.toDataURL("image/png").split(",")[1];
+      const job = await post(`${base}/submit`, { passcode, image });
+      for (let i = 0; i < 180; i++) {
+        await new Promise((res) => setTimeout(res, 2e3));
+        const q = await post(`${base}/result`, { passcode, polling_url: job.polling_url });
+        onWait(i);
+        if (q.status === "Ready") {
+          const blob = await (await fetch(`data:image/png;base64,${q.image}`)).blob();
+          const bitmap = await createImageBitmap(blob);
+          const c = document.createElement("canvas");
+          c.width = bitmap.width;
+          c.height = bitmap.height;
+          c.getContext("2d").drawImage(bitmap, 0, 0);
+          return c;
+        }
+        if (!["Pending", "Processing", "Queued", "Task not found", "Unknown"].includes(q.status)) {
+          throw new Error(`\u63CF\u304D\u76F4\u3057\u306B\u5931\u6557\u3057\u307E\u3057\u305F\uFF08${q.status}\uFF09`);
+        }
+      }
+      throw new Error("\u63CF\u304D\u76F4\u3057\u306E\u7D50\u679C\u304C 6 \u5206\u4EE5\u5185\u306B\u8FD4\u308A\u307E\u305B\u3093\u3067\u3057\u305F");
+    };
+  }
+
   // src/core/motif/MotifTransform.js
   init_geometry();
   var MotifTransform = {
@@ -10309,10 +10918,10 @@ ${xrefPos}
       this.onChange({ reason: "delete" });
     }
     /** 選択中すべてに変形を適用 */
-    applyToSelected(fn, reason = "transform", label2 = null) {
+    applyToSelected(fn, reason = "transform", label3 = null) {
       const targets = this.selectedPlacements;
       if (!targets.length) return;
-      if (label2) this.engine.pushHistory(label2);
+      if (label3) this.engine.pushHistory(label3);
       targets.forEach((p) => fn(p));
       this.engine.markDirty();
       this.requestRender();
@@ -10911,8 +11520,8 @@ ${xrefPos}
         this.engine.pushHistory("\u30E2\u30C1\u30FC\u30D5\u3092\u79FB\u52D5", { coalesce: true });
         this.selectedPlacements.forEach((p) => MotifTransform.move(p, dx, dy, unit));
       };
-      const each = (fn, label2) => {
-        this.engine.pushHistory(label2, { coalesce: true });
+      const each = (fn, label3) => {
+        this.engine.pushHistory(label3, { coalesce: true });
         this.selectedPlacements.forEach(fn);
       };
       const map = {
@@ -11418,17 +12027,17 @@ ${xrefPos}
           task: "detect-motifs",
           crops: local.map((m) => m.canvas)
         });
-        for (const label2 of Array.isArray(labels) ? labels : []) {
-          if (!Number.isInteger(label2?.index)) continue;
-          const target = local[label2.index];
+        for (const label3 of Array.isArray(labels) ? labels : []) {
+          if (!Number.isInteger(label3?.index)) continue;
+          const target = local[label3.index];
           if (!target) continue;
-          const category = MOTIF_CATEGORIES.includes(label2.category) ? label2.category : "unknown";
+          const category = MOTIF_CATEGORIES.includes(label3.category) ? label3.category : "unknown";
           target.category = category;
           target.categoryLabel = CATEGORY_LABELS[category];
-          if (typeof label2.name === "string" && label2.name.trim()) {
-            target.name = label2.name.trim().slice(0, 24);
+          if (typeof label3.name === "string" && label3.name.trim()) {
+            target.name = label3.name.trim().slice(0, 24);
           }
-          const confidence = Number(label2.confidence);
+          const confidence = Number(label3.confidence);
           target.confidence = Number.isFinite(confidence) ? Math.min(1, Math.max(0, confidence)) : 0.6;
           target.source = "ai";
         }
@@ -11471,8 +12080,8 @@ ${xrefPos}
       syncHistoryButtons();
     },
     onZoom: (percent) => {
-      const label2 = $("zoomValue");
-      if (label2) label2.textContent = `${percent}%`;
+      const label3 = $("zoomValue");
+      if (label3) label3.textContent = `${percent}%`;
     },
     onSelect: (placement, many = []) => {
       $("selectionTools").hidden = many.length === 0;
@@ -11590,24 +12199,24 @@ ${xrefPos}
     redo.title = canRedo ? `\u3084\u308A\u76F4\u3059: ${redoLabel}` : "\u3084\u308A\u76F4\u305B\u308B\u64CD\u4F5C\u306F\u3042\u308A\u307E\u305B\u3093";
   }
   function doUndo() {
-    const label2 = engine.undo();
-    if (!label2) return;
+    const label3 = engine.undo();
+    if (!label3) return;
     editor.clearSelection();
     buildStrategySelect();
     buildPresets();
     refreshAll();
     scheduleEvaluate();
-    toast(`\u5143\u306B\u623B\u3057\u307E\u3057\u305F: ${label2}`);
+    toast(`\u5143\u306B\u623B\u3057\u307E\u3057\u305F: ${label3}`);
   }
   function doRedo() {
-    const label2 = engine.redo();
-    if (!label2) return;
+    const label3 = engine.redo();
+    if (!label3) return;
     editor.clearSelection();
     buildStrategySelect();
     buildPresets();
     refreshAll();
     scheduleEvaluate();
-    toast(`\u3084\u308A\u76F4\u3057\u307E\u3057\u305F: ${label2}`);
+    toast(`\u3084\u308A\u76F4\u3057\u307E\u3057\u305F: ${label3}`);
   }
   function buildStrategySelect() {
     const select = $("strategySelect");
@@ -11659,8 +12268,8 @@ ${xrefPos}
     const host = $("genSliders");
     host.innerHTML = "";
     for (const def of SLIDERS) {
-      const label2 = document.createElement("label");
-      label2.className = "field";
+      const label3 = document.createElement("label");
+      label3.className = "field";
       const span = document.createElement("span");
       const b = document.createElement("b");
       span.append(`${def.label} `, b);
@@ -11688,8 +12297,8 @@ ${xrefPos}
           scheduleEvaluate();
         }
       });
-      label2.append(span, input);
-      host.appendChild(label2);
+      label3.append(span, input);
+      host.appendChild(label3);
       input._sync = sync;
       sync();
     }
@@ -11783,7 +12392,7 @@ ${xrefPos}
       const detail = document.createElement("div");
       detail.className = "motif__detail";
       detail.hidden = !openMotifDetails.has(motif.id);
-      const rangeRow = (label2, key, min, max, step, format) => {
+      const rangeRow = (label3, key, min, max, step, format) => {
         const wrap2 = document.createElement("label");
         wrap2.className = "field";
         const span = document.createElement("span");
@@ -11792,7 +12401,7 @@ ${xrefPos}
           const [lo2, hi2] = motif[key] ?? [min, max];
           b.textContent = format(lo2, hi2);
         };
-        span.append(`${label2} `, b);
+        span.append(`${label3} `, b);
         const pair = document.createElement("div");
         pair.className = "range-pair";
         const lo = document.createElement("input");
@@ -11816,7 +12425,7 @@ ${xrefPos}
             sync();
           });
           input.addEventListener("change", () => {
-            engine.pushHistory(`${motif.name} \u306E${label2}\u3092\u5909\u66F4`);
+            engine.pushHistory(`${motif.name} \u306E${label3}\u3092\u5909\u66F4`);
             engine.generate({ seed: engine.recipe.randomization.seed });
             refreshAll();
             scheduleEvaluate();
@@ -11926,12 +12535,12 @@ ${xrefPos}
     }
     $("scoreValue").textContent = report.score;
     host.innerHTML = "";
-    for (const [key, label2] of Object.entries(METRIC_LABELS)) {
+    for (const [key, label3] of Object.entries(METRIC_LABELS)) {
       const value = report.metrics[key] ?? 0;
       const row = document.createElement("div");
       row.className = "metric";
       const name = document.createElement("span");
-      name.textContent = label2;
+      name.textContent = label3;
       const bar = document.createElement("div");
       bar.className = "metric__bar";
       const fill = document.createElement("div");
@@ -12152,9 +12761,9 @@ ${xrefPos}
       const canvas = temp.renderPreview({ grid: 2, scale: 220 / (v.recipe.repeatUnit.width * 2) });
       const btn = document.createElement("button");
       btn.className = "variation";
-      const label2 = document.createElement("span");
-      label2.textContent = `${v.label} \xB7 ${v.name}`;
-      btn.append(canvas, label2);
+      const label3 = document.createElement("span");
+      label3.textContent = `${v.label} \xB7 ${v.name}`;
+      btn.append(canvas, label3);
       btn.addEventListener("click", () => {
         engine.pushHistory(`Variation ${v.label} \u3092\u63A1\u7528`);
         engine.setRecipe(v.recipe);
@@ -12239,8 +12848,8 @@ ${xrefPos}
       const tint = cw.motifTints[motif.id] ?? null;
       const row = document.createElement("div");
       row.className = "cw-row";
-      const label2 = document.createElement("span");
-      label2.textContent = motif.name;
+      const label3 = document.createElement("span");
+      label3.textContent = motif.name;
       const color = document.createElement("input");
       color.className = "color";
       color.type = "color";
@@ -12287,7 +12896,7 @@ ${xrefPos}
       });
       mode.addEventListener("change", () => apply(`${motif.name} \u306E\u8272\u5909\u63DB`));
       amount.addEventListener("input", () => apply(null));
-      row.append(label2, color, mode, amount);
+      row.append(label3, color, mode, amount);
       host.appendChild(row);
     }
   }
@@ -12376,14 +12985,14 @@ ${xrefPos}
   async function setupAi() {
     const status = await claudeVisionProvider.detect();
     const toggle = $("aiToggle");
-    const label2 = $("aiStatus");
+    const label3 = $("aiStatus");
     if (!status.transport || !status.images) {
       toggle.checked = false;
       toggle.disabled = true;
-      label2.textContent = status.images ? `\u7D4C\u8DEF: ${status.detail}` : `\u3053\u306E\u74B0\u5883\u3067\u306F\u753B\u50CF\u3092 AI \u306B\u9001\u308C\u307E\u305B\u3093\uFF08${status.detail}\uFF09\u3002\u30ED\u30FC\u30AB\u30EB\u51E6\u7406\u306E\u307F\u3067\u52D5\u4F5C\u3057\u307E\u3059\u3002`;
+      label3.textContent = status.images ? `\u7D4C\u8DEF: ${status.detail}` : `\u3053\u306E\u74B0\u5883\u3067\u306F\u753B\u50CF\u3092 AI \u306B\u9001\u308C\u307E\u305B\u3093\uFF08${status.detail}\uFF09\u3002\u30ED\u30FC\u30AB\u30EB\u51E6\u7406\u306E\u307F\u3067\u52D5\u4F5C\u3057\u307E\u3059\u3002`;
       return;
     }
-    label2.textContent = `\u7D4C\u8DEF: ${status.detail}`;
+    label3.textContent = `\u7D4C\u8DEF: ${status.detail}`;
     toggle.disabled = false;
   }
   function setAiEnabled(enabled) {
@@ -12522,9 +13131,9 @@ ${xrefPos}
       ['label[for="projectInput"]', "projectInput"],
       ['label[for="recipeInput"]', "recipeInput"]
     ]) {
-      const label2 = document.querySelector(labelSelector);
-      if (!label2) continue;
-      label2.addEventListener("click", (e) => {
+      const label3 = document.querySelector(labelSelector);
+      if (!label3) continue;
+      label3.addEventListener("click", (e) => {
         if (e.target.tagName === "INPUT") return;
         e.preventDefault();
         $(inputId).click();
@@ -12757,6 +13366,69 @@ ${xrefPos}
         `130\xD7200cm \u306E\u30D1\u30CD\u30EB\u306B\u3057\u307E\u3057\u305F\uFF08\u66F8\u304D\u51FA\u3057 ${result.pixels.width}\xD7${result.pixels.height}px / ${engine.recipe.canvas.dpi}dpi\uFF09`,
         5e3
       );
+    });
+    const askRelaySettings = (current) => new Promise((resolve) => {
+      const dlg = $("relayDialog");
+      $("relayUrl").value = current?.relayUrl ?? "";
+      $("relayPass").value = "";
+      dlg.hidden = false;
+      const done = (value) => {
+        dlg.hidden = true;
+        $("relayOk").onclick = null;
+        $("relayCancel").onclick = null;
+        resolve(value);
+      };
+      $("relayOk").onclick = () => {
+        const relayUrl = $("relayUrl").value.trim();
+        const passcode = $("relayPass").value.trim();
+        if (!/^https:\/\//.test(relayUrl) || !passcode) {
+          toast("\u4E2D\u7D99\u5F79\u306E URL\uFF08https:// \u304B\u3089\u59CB\u307E\u308B\u3082\u306E\uFF09\u3068\u5408\u8A00\u8449\u3092\u5165\u308C\u3066\u304F\u3060\u3055\u3044", 5e3);
+          return;
+        }
+        done({ relayUrl, passcode });
+      };
+      $("relayCancel").onclick = () => done(null);
+    });
+    $("aiFillBtn").addEventListener("click", async () => {
+      if (!(engine.recipe.meta.original?.imageId || engine.recipe.background.imageId)) {
+        toast("\u5148\u306B\u67C4\u306E\u753B\u50CF\u3092\u8AAD\u307F\u8FBC\u3093\u3067\u304F\u3060\u3055\u3044");
+        return;
+      }
+      let settings = loadRelaySettings();
+      if (!settings?.relayUrl || !settings?.passcode) {
+        settings = await askRelaySettings(settings);
+        if (!settings) return;
+        saveRelaySettings(settings);
+      }
+      const btn = $("aiFillBtn");
+      btn.disabled = true;
+      engine.pushHistory("AI\u3067\u7D99\u304E\u76EE\u3092\u63CF\u304D\u76F4\u3059");
+      const started = Date.now();
+      try {
+        const inpaint = makeInpainter({ ...settings });
+        const result = await engine.aiRepairSeams(inpaint, {
+          onProgress: (msg) => toast(`${msg}\uFF08${Math.round((Date.now() - started) / 1e3)}\u79D2\uFF09`, 6e4)
+        });
+        if (!result.applied) {
+          toast(result.reason, 5e3);
+          return;
+        }
+        buildStrategySelect();
+        refreshAll();
+        renderQuality(engine.evaluate());
+        renderSeamless(engine.checkSeamless());
+        const detail = result.report.map((r) => `${r.axis} ${r.ok ? "\u5408\u683C" : "\u8981\u78BA\u8A8D"}\uFF08${r.attempt}\u56DE\u76EE\uFF09`).join("\uFF0F");
+        toast(`\u7D99\u304E\u76EE\u3092\u63CF\u304D\u76F4\u3057\u307E\u3057\u305F\uFF1A${detail}\u3002${result.ok ? "" : "\u8981\u78BA\u8A8D\u306E\u5E2F\u306F\u62E1\u5927\u3057\u3066\u76EE\u3067\u78BA\u304B\u3081\u3066\u304F\u3060\u3055\u3044\u3002"}`, 9e3);
+      } catch (e) {
+        if (e.status === 401) {
+          clearRelaySettings();
+          toast("\u5408\u8A00\u8449\u304C\u9055\u3044\u307E\u3059\u3002\u3082\u3046\u4E00\u5EA6\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u5165\u529B\u3057\u76F4\u3057\u3066\u304F\u3060\u3055\u3044", 7e3);
+        } else {
+          toast(`\u63CF\u304D\u76F4\u3057\u306B\u5931\u6557\u3057\u307E\u3057\u305F\uFF1A${e.message}`, 7e3);
+        }
+      } finally {
+        btn.disabled = false;
+      }
     });
     $("changeBtn").addEventListener("click", () => {
       const btn = $("changeBtn");
